@@ -116,32 +116,31 @@ local function spawnDreadFull()
         Saturation = -0.7
     }):Play()
     
-    -- 5. Vòng lặp theo dõi: Kích hoạt khi nhìn tích lũy đủ 2s HOẶC nhìn quá 2 lần
+    -- 5. Vòng lặp theo dõi: Tích lũy không bị trừ + Đếm số lần nhìn lướt (>= 2 lần là bị tóm)
     task.spawn(function()
         local accumulatedLookTime = 0
+        local requiredLookTime = 2.0 -- Tích lũy đủ 2s là bị bắt
+        
         local lookCount = 0
-        local wasLooking = false
+        local maxLookCount = 2      -- Nhìn lướt qua quá 2 lần là bị bắt
+        local wasLooking = false    -- Biến cờ theo dõi trạng thái nhìn để đếm chính xác từng lần lướt
         
         while modelAsset.Parent and dreadRootPart and dreadRootPart.Parent do
             local currentlyLooking = isLookingAtEntity(dreadRootPart)
             
-            -- Đếm số lần nhìn khi bắt đầu xoay qua ngắm
+            -- 1. Xử lý đếm số lần nhìn (Dù lướt qua siêu nhanh cũng đếm đúng 1 lần)
             if currentlyLooking and not wasLooking then
                 lookCount = lookCount + 1
             end
-            
-            -- Tích lũy thời gian nếu đang nhìn
-            if currentlyLooking then
-                accumulatedLookTime = accumulatedLookTime + 0.1
-            else
-                accumulatedLookTime = math.max(0, accumulatedLookTime - 0.05)
-            end
-            
             wasLooking = currentlyLooking
             
-            -- KIỂM TRA ĐIỀU KIỆN: Nhìn tích lũy >= 2.0s HOẶC Nhìn >= 2 lần
-                        -- KIỂM TRA ĐIỀU KIỆN: Nhìn tích lũy >= 2.0s HOẶC Nhìn >= 2 lần
-            if accumulatedLookTime >= 2.0 or lookCount >= 2 then
+            -- 2. Xử lý tích lũy thời gian (Chỉ cộng thêm khi nhìn, không bị trừ khi quay đi)
+            if currentlyLooking then
+                accumulatedLookTime = accumulatedLookTime + 0.1
+            end
+            
+            -- KIỂM TRA ĐIỀU KIỆN: Tích lũy đủ 2.0s HOẶC Nhìn lướt từ 2 lần trở lên
+            if accumulatedLookTime >= requiredLookTime or lookCount >= maxLookCount then
                 colorCorrection.Enabled = false
                 
                 local player = game.Players.LocalPlayer
@@ -170,19 +169,22 @@ local function spawnDreadFull()
                 local oldCFrame = camera.CFrame
                 camera.CameraType = Enum.CameraType.Scriptable
                 
-                -- Tạo animation xoay camera hướng thẳng vào mặt Dread
-                local lookTween = TweenService:Create(camera, TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.In), {
-                    CFrame = CFrame.lookAt(oldCFrame.p, dreadRootPart.Position)
+                -- Xoay camera nhắm chuẩn xác trực diện vào vị trí tâm của Dread
+                local targetCFrame = CFrame.lookAt(oldCFrame.Position, dreadRootPart.Position)
+                local lookTween = TweenService:Create(camera, TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.In), {
+                    CFrame = targetCFrame
                 })
                 lookTween:Play()
                 task.wait(0.15)
+                
+                -- Khóa cứng hướng camera nhìn thẳng vào Dread
+                camera.CFrame = CFrame.lookAt(camera.CFrame.Position, dreadRootPart.Position)
                 
                 -- Phát âm thanh jumpscare từ GitHub
                 local jumpScareSound = GetGitSound("https://github.com/Tinkgy111/Bang/blob/main/lv_0_20250111000930.mp3?raw=true", "dread_jumpscare")
                 jumpScareSound.Parent = workspace
                 jumpScareSound.Volume = 3
                 jumpScareSound:Play()
-                lookTween:Pause()
                 
                 -- Đóng băng toàn bộ hiệu ứng hạt trong phòng
                 for _, obj in pairs(workspace:GetDescendants()) do
@@ -223,8 +225,13 @@ local function spawnDreadFull()
                     loadstring(game:HttpGet("https://raw.githubusercontent.com/XAtomMaster339871/dkrsoilcfrkjghfhgrthngnrtuyghrtuhngur/main/erfz", true))()
                 end)
                 
-                -- Gửi bảng thông báo chết màu xanh dương chuẩn Guiding Light của Dread (Cause = "Dread")
-                local remoteFolder = game.ReplicatedStorage:FindFirstChild("RemotesFolder")
+                -- 1. Gán nguyên nhân chết cho người chơi vào GameStats
+                pcall(function()
+                    ReplicatedStorage.GameStats["Player_" .. player.Name].Total.DeathCause.Value = "Dread"
+                end)
+
+                -- 2. Gửi bảng thông báo chết màu xanh dương chuẩn Guiding Light của Dread (Cause = "Dread")
+                local remoteFolder = ReplicatedStorage:FindFirstChild("RemotesFolder")
                 if remoteFolder and remoteFolder:FindFirstChild("DeathHint") then
                     firesignal(remoteFolder.DeathHint.OnClientEvent, {
                         "You died to Dread...",
@@ -233,7 +240,7 @@ local function spawnDreadFull()
                     }, "Blue", "Dread")
                 end
                 
-                -- Trừ sạch máu để nhân vật chính thức chết và hiện bảng kết quả
+                -- 3. Trừ sạch máu để nhân vật chính thức chết và hiện bảng kết quả
                 local humanoid = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
                 if humanoid then
                     humanoid.Health = 0
@@ -242,7 +249,7 @@ local function spawnDreadFull()
                 break
             end
             
-            task.wait(0.1)
+            task.wait(0.05) -- Tăng tần suất quét lên 0.05s để phát hiện góc nhìn siêu nhanh
         end
     end)
     
