@@ -173,11 +173,11 @@ end)
 pcall(function()
 	if entity:FindFirstChild("Ambience") then
 		entity.Ambience.SoundId = "rbxassetid://1102548016"
-		entity.Ambience.Volume = 0.4
+		entity.Ambience.Volume = 0.8
 		entity.Ambience:Play()
 	end
 	if entity:FindFirstChild("AmbienceFar") then
-		entity.AmbienceFar.Volume = 0.3
+		entity.AmbienceFar.Volume = 0.6
 		entity.AmbienceFar:Play()
 	end
 end)
@@ -186,7 +186,7 @@ end)
 local activeSound = Instance.new("Sound")
 activeSound.Name = "Frostbite_ActiveSound"
 activeSound.SoundId = "rbxassetid://127072724991408"
-activeSound.Volume = 0.8
+activeSound.Volume = 1.6
 activeSound.Looped = true
 activeSound.Parent = entity
 activeSound:Play()
@@ -242,7 +242,7 @@ task.spawn(function()
 			if hum and hum.Health > 0 then
 				local isProtected = IsLighterActive(chr)
 				if not isProtected then
-					hum:TakeDamage(3)
+					hum:TakeDamage(5)
 
 					pcall(function()
 						local stats = ReplicatedStorage:FindFirstChild("GameStats")
@@ -325,7 +325,7 @@ local function Cleanup()
 			local des = Instance.new("Sound")
 			des.SoundId = "rbxassetid://111715441853991"
 			des.Looped = false
-			des.Volume = 0.8
+			des.Volume = 1.6
 			des.Parent = workspace
 			des:Play()
 
