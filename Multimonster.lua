@@ -382,7 +382,7 @@ local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/Regul
 local entity = spawner.Create({
 	Entity = {
 		Name = "multimonster",
-		Asset = "12263106166",
+		Asset = "rbxassetid://74103016339839",
 		HeightOffset = 0
 	},
 	Lights = {
