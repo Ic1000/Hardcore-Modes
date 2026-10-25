@@ -185,7 +185,7 @@ end)
 -- Âm thanh hoạt động chính thức
 local activeSound = Instance.new("Sound")
 activeSound.Name = "Frostbite_ActiveSound"
-activeSound.SoundId = "127072724991408"
+activeSound.SoundId = "rbxassetid://127072724991408"
 activeSound.Volume = 0.8
 activeSound.Looped = true
 activeSound.Parent = entity
