@@ -529,7 +529,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 		pcall(function()
 			for _, v in pairs(womp:GetDescendants()) do
 				if v:IsA("Sound") and v.IsPlaying then
-					v:Pause()
+					v:Stop()
 				end
 			end
 		end)
@@ -615,7 +615,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 
 			TweenService:Create(jumpscareImg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.new(1.2, 0, 1.4, 0),
-				Rotation = math.random(-25, 25)
+				Rotation = math.random(-25, 50)
 			}):Play()
 			
 			task.wait(0.5)
