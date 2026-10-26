@@ -476,7 +476,7 @@ entity:SetCallback("OnSpawned", function()
 				for _, tex in ipairs(textures) do
 					if not isJumpscaring then break end
 					e.Texture = tex
-					task.wait(0.015)
+					task.wait(0)
 				end
 			else
 				if e.Texture ~= originalTexture then
