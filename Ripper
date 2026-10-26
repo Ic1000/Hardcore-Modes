@@ -31,6 +31,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local ripperActive = false
 local processedRooms = {}
 local ripperIsMoving = false -- Biến cờ kiểm tra xem thực thể đã bắt đầu di chuyển hay chưa
+local activeRipperModel = nil -- Biến lưu trữ Model của Ripper để tính khoảng cách
 
 --========================================================--
 -- ONE TIME CONTROL
@@ -155,6 +156,7 @@ doorSound3.Parent = SoundService
 
 local CurrentRooms = workspace:WaitForChild("CurrentRooms")
 
+-- Danh sách tất cả các âm thanh phá hủy sẽ được chạy hết lượt
 local breakSounds = {
 	"rbxassetid://9125992545",
 	"rbxassetid://4004052860",
@@ -218,17 +220,20 @@ end
 local function shakeCollision(collision)
 	if not collision or collision.Anchored then return end
 	
+	-- CHẠY HẾT TẤT CẢ ÂM THANH TRONG MẢNG BREAKSOUNDS
 	pcall(function()
-		local sound = Instance.new("Sound")
-		sound.SoundId = breakSounds[math.random(1, #breakSounds)]
-		sound.Volume = math.random(12, 24) / 10
-		sound.PlaybackSpeed = math.random(85, 115) / 100
-		sound.RollOffMaxDistance = 100
-		sound.Parent = collision
-		sound:Play()
-		sound.Ended:Connect(function()
-			sound:Destroy()
-		end)
+		for _, soundId in ipairs(breakSounds) do
+			local sound = Instance.new("Sound")
+			sound.SoundId = soundId
+			sound.Volume = math.random(12, 24) / 10
+			sound.PlaybackSpeed = math.random(85, 115) / 100
+			sound.RollOffMaxDistance = 100
+			sound.Parent = collision
+			sound:Play()
+			sound.Ended:Connect(function()
+				sound:Destroy()
+			end)
+		end
 	end)
 
 	local mass = collision.AssemblyMass
@@ -356,7 +361,7 @@ local function BreakRoom(room)
 		mainBreak:Play()
 		mainBreak.Ended:Connect(function() mainBreak:Destroy() end)
 
-		-- CHỈ PHÁT ÂM THANH TỪ GITHUB KHI THỰC THỂ ĐÃ THỰC SỰ DI CHUYỂN
+		-- CHỈ PHÁT ÂM THANH PHÁ ĐỒ THEO CƠ CHẾ KHOẢNG CÁCH (DISTANCE CHECK <= 100 STUD)
 		if ripperIsMoving then
 			local gitUrls = {
 				{ "https://github.com/cakmay227-svg/random/raw/refs/heads/main/XRecorder_Edited_20260801_01.mp3?raw=true", "jjjciie" },
@@ -365,14 +370,45 @@ local function BreakRoom(room)
 			}
 			local pick = gitUrls[math.random(1, #gitUrls)]
 			local gitSound = GetGitSound(pick[1], pick[2])
+			
 			if gitSound then
-				gitSound.Parent = assets
-				gitSound.Volume = 5
-				gitSound.PlaybackSpeed = 1
-				gitSound.RollOffMaxDistance = 1000
-				gitSound:Play()
-				gitSound.Ended:Connect(function()
-					gitSound:Destroy()
+				local breaking = Instance.new("Sound")
+				breaking.SoundId = gitSound.SoundId
+				breaking.PlaybackSpeed = 1
+				breaking.Parent = assets
+				breaking.Looped = false
+				breaking.RollOffMaxDistance = 1000
+				breaking.Volume = 6
+
+				task.spawn(function()
+					local ripe = activeRipperModel and (activeRipperModel:FindFirstChild("Ripe") or activeRipperModel.PrimaryPart)
+					local conn
+					conn = RunService.Heartbeat:Connect(function()
+						local character = LocalPlayer.Character
+						local hrp = character and character:FindFirstChild("HumanoidRootPart")
+						
+						if not hrp or not ripe or not breaking.Parent then
+							if conn then conn:Disconnect() end
+							return
+						end
+
+						-- KIỂM TRA KHOẢNG CÁCH DƯỚI 100 STUD MỚI PHÁT ÂM THANH
+						local inRange = (ripe.Position - hrp.Position).Magnitude <= 100
+						if inRange then
+							if not breaking.IsPlaying then
+								breaking:Play()
+							end
+						else
+							if breaking.IsPlaying then
+								breaking:Stop()
+							end
+						end
+					end)
+
+					breaking.Ended:Connect(function()
+						if conn then conn:Disconnect() end
+						breaking:Destroy()
+					end)
 				end)
 			end
 		end
@@ -576,6 +612,7 @@ local function SpawnRipper()
 
 	entity:SetCallback("OnSpawned", function()
 		print("[RIPPER] Entity spawned")
+		activeRipperModel = entity.Model -- Lưu lại reference model để kiểm tra khoảng cách
 		SetRoomRed(true)
 		introSound:Stop()
 		introSound.TimePosition = 0
@@ -630,6 +667,7 @@ local function SpawnRipper()
 			print("[RIPPER] Despawned")
 			ripperActive = false
 			ripperIsMoving = false
+			activeRipperModel = nil
 
 			introSound:Stop()
 			doorSound1:Stop()
@@ -659,6 +697,7 @@ local function SpawnRipper()
 			warn("[RIPPER] Run failed:", runError)
 			ripperActive = false
 			ripperIsMoving = false
+			activeRipperModel = nil
 		end
 	end)
 end
