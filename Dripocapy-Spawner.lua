@@ -1,6 +1,7 @@
 -- ========================================================
---          CUSTOM ENTITY SPAWNER (FIXED & OPTIMIZED)
+--          CUSTOM ENTITY SPAWNER (FIXED NODE & SPAWN)
 -- ========================================================
+
 -- Services
 local Players = game:GetService("Players")
 local ReSt = game:GetService("ReplicatedStorage")
@@ -18,447 +19,517 @@ local FindPartOnRayWithIgnoreList = workspace.FindPartOnRayWithIgnoreList
 local WorldToViewportPoint = Camera.WorldToViewportPoint
 
 local SelfModules = {
-	DefaultConfig = loadstring(game:HttpGet("https://raw.githubusercontent.com/DripCapybara/Test/main/Doors/Backup/DefaultConfig.lua"))(),
-	Functions = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Functions.lua"))(),
+    DefaultConfig = loadstring(game:HttpGet("https://raw.githubusercontent.com/DripCapybara/Test/main/Doors/Backup/DefaultConfig.lua"))(),
+    Functions = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Functions.lua"))(),
 }
 
 local ModuleScripts = {
-	ModuleEvents = ReSt:FindFirstChild("ModulesClient") and require(ReSt.ModulesClient.Module_Events) or nil,
-	MainGame = tryRequire(Plr.PlayerGui.MainUI.Initiator.Main_Game),
+    ModuleEvents = ReSt:FindFirstChild("ModulesClient") and require(ReSt.ModulesClient.Module_Events) or nil,
+    MainGame = require(Plr.PlayerGui.MainUI.Initiator.Main_Game),
 }
-
-function tryRequire(path)
-	local success, result = pcall(function() return require(path) end)
-	return success and result or nil
-end
 
 local Spawner = {}
 
 -- Misc Functions
 local function onCharacterAdded(char)
-	Char, Hum = char, char:WaitForChild("Humanoid")
+    Char, Hum = char, char:WaitForChild("Humanoid")
 end
 
 local function getPlayerRoot()
-	return Char:FindFirstChild("HumanoidRootPart") or Char:FindFirstChild("Head")
+    return Char:FindFirstChild("HumanoidRootPart") or Char:FindFirstChild("Head")
 end
 
 local function safeLoadAsset(assetId)
-	local success, result = pcall(function()
-		if type(LoadCustomInstance) == "function" then
-			return LoadCustomInstance(assetId)
-		else
-			local idNum = tostring(assetId):gsub("%D", "")
-			return game:GetObjects("rbxassetid://" .. idNum)[1]
-		end
-	end)
-	if success and result then return result end
-	warn("Failed to load custom instance: " .. tostring(assetId))
-	return nil
+    local success, result = pcall(function()
+        if type(LoadCustomInstance) == "function" then
+            return LoadCustomInstance(assetId)
+        else
+            local idNum = tostring(assetId):gsub("%D", "")
+            return game:GetObjects("rbxassetid://" .. idNum)[1]
+        end
+    end)
+    if success and result then
+        return result
+    end
+    warn("Failed to load custom instance: " .. tostring(assetId))
+    return nil
 end
 
 local function safeLoadAssetImage(assetId)
-	local success, result = pcall(function()
-		if type(LoadCustomAsset) == "function" then
-			return LoadCustomAsset(assetId)
-		else
-			local idNum = tostring(assetId):gsub("%D", "")
-			return "rbxassetid://" .. idNum
-		end
-	end)
-	if success and result then return result end
-	return tostring(assetId)
+    local success, result = pcall(function()
+        if type(LoadCustomAsset) == "function" then
+            return LoadCustomAsset(assetId)
+        else
+            local idNum = tostring(assetId):gsub("%D", "")
+            return "rbxassetid://" .. idNum
+        end
+    end)
+    if success and result then
+        return result
+    end
+    return tostring(assetId)
 end
 
--- FIX HOÀN CHỈNH: Hàm kéo Entity di chuyển theo Node cực mượt mà và không bao giờ kẹt
-local function dragEntity(entityTable, entityModel, targetPos, speed)
-	if entityTable.Connections.movementNode then
-		entityTable.Connections.movementNode:Disconnect()
-	end
+-- FIX TRỆT ĐỂ: Hàm di chuyển theo Node mượt mà, không bao giờ bị kẹt
+local function dragEntity(entityTable, entityModel, targetCFrame, speed)
+    if entityTable.Connections.movementNode then
+        entityTable.Connections.movementNode:Disconnect()
+    end
+    
+    local reached = false
+    entityTable.Connections.movementNode = RS.Stepped:Connect(function(_, step)
+        if entityModel and entityModel.Parent and not entityModel:GetAttribute("NoAI") then
+            local primaryPart = entityModel.PrimaryPart
+            if primaryPart then
+                local currentCF = entityModel:GetPivot()
+                local targetCF = targetCFrame
+                local distance = (targetCF.Position - currentCF.Position).Magnitude
 
-	local reached = false
-	entityTable.Connections.movementNode = RS.RenderStepped:Connect(function(dt)
-		if entityModel and entityModel.Parent and not entityModel:GetAttribute("NoAI") then
-			local primaryPart = entityModel.PrimaryPart
-			if primaryPart then
-				local rootPos = primaryPart.Position
-				local destination = Vector3.new(targetPos.X, targetPos.Y, targetPos.Z)
-				local diff = destination - rootPos
-				local distance = diff.Magnitude
-
-				if distance > 2 then
-					local moveStep = math.min(dt * speed, distance)
-					local newPos = rootPos + diff.Unit * moveStep
-					-- Xoay mặt entity hướng về phía trước theo hướng di chuyển
-					entityModel:PivotTo(CFrame.new(newPos, destination + Vector3.new(0, diff.Y, 0)))
-				else
-					reached = true
-					if entityTable.Connections.movementNode then
-						entityTable.Connections.movementNode:Disconnect()
-					end
-				end
-			else
-				if entityTable.Connections.movementNode then entityTable.Connections.movementNode:Disconnect() end
-			end
-		else
-			if entityTable.Connections.movementNode then entityTable.Connections.movementNode:Disconnect() end
-		end
-	end)
-
-	pcall(function()
-		repeat task.wait() until reached or not entityTable.Connections.movementNode or not entityTable.Connections.movementNode.Connected
-	end)
+                if distance > 2 then
+                    -- Dùng CFrame:Lerp để di chuyển cực kỳ mượt và chuẩn hướng
+                    local alpha = math.min((step * speed) / distance, 1)
+                    entityModel:PivotTo(currentCF:Lerp(targetCF, alpha))
+                else
+                    reached = true
+                    if entityTable.Connections.movementNode then
+                        entityTable.Connections.movementNode:Disconnect()
+                    end
+                end
+            else
+                if entityTable.Connections.movementNode then
+                    entityTable.Connections.movementNode:Disconnect()
+                end
+            end
+        else
+            if entityTable.Connections.movementNode then
+                entityTable.Connections.movementNode:Disconnect()
+            end
+        end
+    end)
+    
+    pcall(function()
+        repeat task.wait() until reached or not entityTable.Connections.movementNode or not entityTable.Connections.movementNode.Connected
+    end)
 end
 
 local function loadSound(soundData)
-	local sound = Instance.new("Sound")
-	local soundId = tostring(soundData[1])
-	local properties = soundData[2]
-	for i, v in next, properties do
-		if i ~= "SoundId" and i ~= "Parent" then
-			sound[i] = v
-		end
-	end
-	if soundId:find("rbxasset://") or soundId:find("http") then
-		sound.SoundId = soundId
-	else
-		local numberId = soundId:gsub("%D", "")
-		sound.SoundId = "rbxassetid://" .. numberId
-	end
-	sound.Parent = workspace
-	return sound
+    local sound = Instance.new("Sound")
+    local soundId = tostring(soundData[1])
+    local properties = soundData[2]
+    
+    for i, v in next, properties do
+        if i ~= "SoundId" and i ~= "Parent" then
+            sound[i] = v
+        end
+    end
+    
+    if soundId:find("rbxasset://") or soundId:find("http") then
+        sound.SoundId = soundId
+    else
+        local numberId = soundId:gsub("%D", "")
+        sound.SoundId = "rbxassetid://" .. numberId
+    end
+    sound.Parent = workspace
+    return sound
 end
 
 -- Spawner Functions
 Spawner.createEntity = function(config)
-	for i, v in next, SelfModules.DefaultConfig do
-		if config[i] == nil then
-			config[i] = v
-		end
-	end
-	config.Speed = StaticRushSpeed / 100 * config.Speed
+    for i, v in next, SelfModules.DefaultConfig do
+        if config[i] == nil then
+            config[i] = v
+        end
+    end
+    config.Speed = StaticRushSpeed / 100 * config.Speed
 
-	if config.Model == "12262883448" or config.Model == "rbxassetid://12262883448" then
-		CG = Plr.PlayerGui
-		config.RUNFORYOURDARNLIFE = true
-	end
+    if config.Model == "12262883448" or config.Model == "rbxassetid://12262883448" then
+        CG = Plr.PlayerGui
+        config.RUNFORYOURDARNLIFE = true
+    end
 
-	local entityModel = safeLoadAsset(config.Model)
-	if typeof(entityModel) == "Instance" and entityModel.ClassName == "Model" then
-		entityModel.PrimaryPart = entityModel.PrimaryPart or entityModel:FindFirstChildWhichIsA("BasePart")
-		if entityModel.PrimaryPart then
-			entityModel.PrimaryPart.Anchored = true
-			if config.CustomName then
-				entityModel.Name = config.CustomName
-			end
-			entityModel:SetAttribute("IsCustomEntity", true)
-			entityModel:SetAttribute("NoAI", false)
+    local entityModel = safeLoadAsset(config.Model)
+    if typeof(entityModel) == "Instance" and entityModel.ClassName == "Model" then
+        entityModel.PrimaryPart = entityModel.PrimaryPart or entityModel:FindFirstChildWhichIsA("BasePart")
+        if entityModel.PrimaryPart then
+            entityModel.PrimaryPart.Anchored = true
+            if config.CustomName then
+                entityModel.Name = config.CustomName
+            end
+            entityModel:SetAttribute("IsCustomEntity", true)
+            entityModel:SetAttribute("NoAI", false)
 
-			local entityTable = {
-				Model = entityModel,
-				Config = config,
-				Debug = {
-					OnEntitySpawned = function() end,
-					OnEntityDespawned = function() end,
-					OnEntityStartMoving = function() end,
-					OnEntityFinishedRebound = function() end,
-					OnEntityEnteredRoom = function() end,
-					OnLookAtEntity = function() end,
-					OnDeath = function() end
-				},
-				Connections = {}
-			}
-			return entityTable
-		end
-	end
-	warn("Spawner Error: Could not create entity model properly.")
-	return nil
+            local entityTable = {
+                Model = entityModel,
+                Config = config,
+                Debug = {
+                    OnEntitySpawned = function() end,
+                    OnEntityDespawned = function() end,
+                    OnEntityStartMoving = function() end,
+                    OnEntityFinishedRebound = function() end,
+                    OnEntityEnteredRoom = function() end,
+                    OnLookAtEntity = function() end,
+                    OnDeath = function() end
+                },
+                Connections = {}
+            }
+            return entityTable
+        end
+    end
+    warn("Spawner Error: Could not create entity model properly.")
+    return nil
 end
 
 Spawner.runEntity = function(entityTable)
-	if not entityTable or not entityTable.Model then return end
+    if not entityTable or not entityTable.Model then return end
 
-	-- FIX HOÀN CHỈNH: Hàm quét Node toàn diện lấy từ mọi ngóc ngách của Doors CurrentRooms
-	local function fetchNodes()
-		local nodes = {}
-		local currentRooms = workspace:FindFirstChild("CurrentRooms")
-		if not currentRooms then return nodes end
+    -- Hàm quét Node chuẩn chỉnh từng phòng
+    local function fetchNodes()
+        local nodes = {}
+        local currentRooms = workspace:FindFirstChild("CurrentRooms")
+        if not currentRooms then return nodes end
 
-		-- Sắp xếp các phòng theo số thứ tự (Room 1, Room 2, Room 3...)
-		local rooms = currentRooms:GetChildren()
-		table.sort(rooms, function(a, b)
-			return (tonumber(a.Name) or 0) < (tonumber(b.Name) or 0)
-		end)
+        for _, room in next, currentRooms:GetChildren() do
+            local roomNodes = {}
+            
+            local figureNodes = room:FindFirstChild("FigureNodes", true)
+            if figureNodes then
+                for _, node in next, figureNodes:GetChildren() do
+                    if node:IsA("BasePart") then roomNodes[#roomNodes + 1] = node end
+                end
+            end
+            
+            if #roomNodes == 0 then
+                local pathfindNodes = room:FindFirstChild("PathfindNodes")
+                if pathfindNodes then
+                    for _, node in next, pathfindNodes:GetChildren() do
+                        if node:IsA("BasePart") then roomNodes[#roomNodes + 1] = node end
+                    end
+                end
+            end
+            
+            if #roomNodes == 0 then
+                for _, desc in next, room:GetDescendants() do
+                    if desc:IsA("BasePart") and (desc.Name == "PathfindNode" or desc.Name == "Node" or desc.Name:match("^%d+$")) then
+                        roomNodes[#roomNodes + 1] = desc
+                    end
+                end
+            end
 
-		for _, room in next, rooms do
-			local roomNodes = {}
-			
-			-- 1. Tìm FigureNodes
-			local figureNodes = room:FindFirstChild("FigureNodes", true)
-			if figureNodes then
-				for _, node in next, figureNodes:GetChildren() do
-					if node:IsA("BasePart") then roomNodes[#roomNodes + 1] = node end
-				end
-			end
+            if #roomNodes == 0 then
+                local roomExit = room:FindFirstChild("RoomExit")
+                local roomEntrance = room:FindFirstChild("RoomEntrance")
+                if roomEntrance then roomNodes[#roomNodes + 1] = roomEntrance end
+                if roomExit then roomNodes[#roomNodes + 1] = roomExit end
+            end
 
-			-- 2. Tìm PathfindNodes nếu chưa có
-			if #roomNodes == 0 then
-				local pathfindNodes = room:FindFirstChild("PathfindNodes")
-				if pathfindNodes then
-					for _, node in next, pathfindNodes:GetChildren() do
-						if node:IsA("BasePart") then roomNodes[#roomNodes + 1] = node end
-					end
-				end
-			end
+            if #roomNodes == 0 then
+                local fallbackPart = room:FindFirstChildWhichIsA("BasePart", true)
+                if fallbackPart then roomNodes[1] = fallbackPart end
+            end
+            
+            table.sort(roomNodes, function(a, b)
+                local numA = tonumber(a.Name) or 0
+                local numB = tonumber(b.Name) or 0
+                return numA < numB
+            end)
+            
+            for _, node in next, roomNodes do
+                nodes[#nodes + 1] = node
+            end
+        end
+        return nodes
+    end
 
-			-- 3. Tìm các node đánh số chuẩn
-			if #roomNodes == 0 then
-				for _, desc in next, room:GetDescendants() do
-					if desc:IsA("BasePart") and (desc.Name == "PathfindNode" or desc.Name == "Node" or desc.Name:match("^%d+$")) then
-						roomNodes[#roomNodes + 1] = desc
-					end
-				end
-			end
+    local nodes = fetchNodes()
+    if #nodes == 0 then
+        warn("Spawner: No nodes found for entity pathfinding!")
+        return
+    end
 
-			-- 4. Fallback cửa ra/vào phòng
-			if #roomNodes == 0 then
-				local roomEntrance = room:FindFirstChild("RoomEntrance")
-				local roomExit = room:FindFirstChild("RoomExit")
-				if roomEntrance then roomNodes[#roomNodes + 1] = roomEntrance end
-				if roomExit then roomNodes[#roomNodes + 1] = roomExit end
-			end
+    local thing
+    if entityTable.Config.RUNFORYOURDARNLIFE == true then
+        local currentRooms = workspace:FindFirstChild("CurrentRooms")
+        if currentRooms then
+            thing = currentRooms.ChildAdded:Connect(function(c)
+                nodes = fetchNodes()
+            end)
+        end
+    end
 
-			-- Sắp xếp tên node theo số (1, 2, 3...)
-			table.sort(roomNodes, function(a, b)
-				local numA = tonumber(a.Name) or 0
-				local numB = tonumber(b.Name) or 0
-				return numA < numB
-			end)
+    -- Spawn Model (FIX: Đảm bảo spawn đúng ngay đầu node đầu tiên hoặc vị trí người chơi nếu cần)
+    local entityModel = entityTable.Model:Clone()
+    local startNodeIndex = entityTable.Config.BackwardsMovement and #nodes or 1
+    
+    if nodes[startNodeIndex] then
+        entityModel:PivotTo(nodes[startNodeIndex].CFrame + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0))
+    else
+        entityModel:PivotTo(Char:GetPivot() + Vector3.new(0, 5, 0))
+    end
+    entityModel.Parent = workspace
 
-			for _, node in next, roomNodes do
-				nodes[#nodes + 1] = node
-			end
-		end
-		return nodes
-	end
+    task.spawn(entityTable.Debug.OnEntitySpawned)
 
-	local nodes = fetchNodes()
-	if #nodes == 0 then
-		warn("Spawner: No nodes found for entity pathfinding!")
-		return
-	end
+    if CG:FindFirstChild("JumpscareGui") or (Plr.PlayerGui.MainUI.Death.HelpfulDialogue.Visible and not Plr.PlayerGui.MainUI.DeathPanelDead.Visible) then
+        for _, v in next, entityModel:GetDescendants() do
+            if v.ClassName == "Sound" and v.Playing then
+                v:Stop()
+            end
+        end
+    end
 
-	local thing
-	if entityTable.Config.RUNFORYOURDARNLIFE == true then
-		local currentRooms = workspace:FindFirstChild("CurrentRooms")
-		if currentRooms then
-			thing = currentRooms.ChildAdded:Connect(function(c)
-				nodes = fetchNodes()
-			end)
-		end
-	end
+    if entityTable.Config.FlickerLights[1] and ModuleScripts.ModuleEvents then
+        local latestRoomVal = ReSt:FindFirstChild("GameData") and ReSt.GameData:FindFirstChild("LatestRoom")
+        if latestRoomVal and workspace.CurrentRooms:FindFirstChild(tostring(latestRoomVal.Value)) then
+            ModuleScripts.ModuleEvents.flicker(workspace.CurrentRooms[tostring(latestRoomVal.Value)], entityTable.Config.FlickerLights[2])
+        end
+    end
 
-	-- Spawn Model chuẩn xác tại node đầu tiên hoặc phòng hiện tại của người chơi
-	local entityModel = entityTable.Model:Clone()
-	local startNodeIndex = entityTable.Config.BackwardsMovement and #nodes or 1
-	local startNodeOffset = entityTable.Config.BackwardsMovement and -20 or 20
+    task.wait(entityTable.Config.DelayTime)
+    local enteredRooms = {}
 
-	if nodes[startNodeIndex] then
-		entityModel:PivotTo(nodes[startNodeIndex].CFrame * CFrame.new(0, 0, startNodeOffset) + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0))
-	end
-	entityModel.Parent = workspace
-	task.spawn(entityTable.Debug.OnEntitySpawned)
+    -- Vòng lặp kiểm tra Va Chạm / Tầm Nhìn / Giết Người Chơi
+    entityTable.Connections.movementTick = RS.Stepped:Connect(function()
+        if entityModel.Parent and not entityModel:GetAttribute("NoAI") and entityModel.PrimaryPart then
+            local entityPos = entityModel.PrimaryPart.Position
+            local rootPart = getPlayerRoot()
+            if not rootPart then return end
+            local rootPos = rootPart.Position
 
-	if CG:FindFirstChild("JumpscareGui") or (Plr.PlayerGui.MainUI.Death.HelpfulDialogue.Visible and not Plr.PlayerGui.MainUI.DeathPanelDead.Visible) then
-		for _, v in next, entityModel:GetDescendants() do
-			if v.ClassName == "Sound" and v.Playing then v:Stop() end
-		end
-	end
+            local floorRay = FindPartOnRayWithIgnoreList(workspace, Ray.new(entityPos, Vector3.new(0, -10, 0)), {entityModel, Char})
+            local playerInSight = FindPartOnRayWithIgnoreList(workspace, Ray.new(entityPos, rootPos - entityPos), {entityModel, Char}) == nil
 
-	if entityTable.Config.FlickerLights[1] and ModuleScripts.ModuleEvents then
-		local latestRoomVal = ReSt:FindFirstChild("GameData") and ReSt.GameData:FindFirstChild("LatestRoom")
-		if latestRoomVal and workspace.CurrentRooms:FindFirstChild(tostring(latestRoomVal.Value)) then
-			ModuleScripts.ModuleEvents.flicker(workspace.CurrentRooms[tostring(latestRoomVal.Value)], entityTable.Config.FlickerLights[2])
-		end
-	end
+            if floorRay ~= nil and floorRay.Name == "Floor" then
+                local currentRooms = workspace:FindFirstChild("CurrentRooms")
+                if currentRooms then
+                    for _, room in next, currentRooms:GetChildren() do
+                        if floorRay:IsDescendantOf(room) and not table.find(enteredRooms, room) then
+                            enteredRooms[#enteredRooms + 1] = room
+                            task.spawn(entityTable.Debug.OnEntityEnteredRoom, room)
+                            if entityTable.Config.BreakLights and ModuleScripts.ModuleEvents then
+                                ModuleScripts.ModuleEvents.shatter(room)
+                            end
+                            break
+                        end
+                    end
+                end
+            end
 
-	task.wait(entityTable.Config.DelayTime)
-	local enteredRooms = {}
+            local shakeConfig = entityTable.Config.CamShake
+            local shakeMag = (rootPos - entityPos).Magnitude
+            if shakeConfig[1] and shakeMag <= shakeConfig[3] then
+                local shakeRep = {}
+                for i, v in next, shakeConfig[2] do
+                    shakeRep[i] = v
+                end
+                shakeRep[1] = shakeConfig[2][1] / shakeConfig[3] * (shakeConfig[3] - shakeMag)
+                if ModuleScripts.MainGame and ModuleScripts.MainGame.camShaker then
+                    ModuleScripts.MainGame.camShaker.ShakeOnce(ModuleScripts.MainGame.camShaker, table.unpack(shakeRep))
+                end
+            end
 
-	-- Vòng lặp kiểm tra Va Chạm / Tầm Nhìn / Giết Người Chơi
-	entityTable.Connections.movementTick = RS.Stepped:Connect(function()
-		if entityModel.Parent and not entityModel:GetAttribute("NoAI") and entityModel.PrimaryPart then
-			local entityPos = entityModel.PrimaryPart.Position
-			local rootPart = getPlayerRoot()
-			if not rootPart then return end
-			local rootPos = rootPart.Position
+            if playerInSight then
+                local _, onScreen = WorldToViewportPoint(Camera, entityModel.PrimaryPart.Position)
+                if onScreen then
+                    task.spawn(entityTable.Debug.OnLookAtEntity)
+                end
 
-			local floorRay = FindPartOnRayWithIgnoreList(workspace, Ray.new(entityPos, Vector3.new(0, -10, 0)), {entityModel, Char})
-			local playerInSight = FindPartOnRayWithIgnoreList(workspace, Ray.new(entityPos, rootPos - entityPos), {entityModel, Char}) == nil
+                if entityTable.Config.CanKill and not Char:GetAttribute("IsDead") and not Char:GetAttribute("Invincible") and (rootPos - entityPos).Magnitude <= entityTable.Config.KillRange then
+                    task.spawn(function()
+                        if Char:GetAttribute("Hiding") and not entityTable.Config.RUNFORYOURDARNLIFE then
+                            return
+                        end
+                        Char:SetAttribute("IsDead", true)
 
-			if floorRay ~= nil and floorRay.Name == "Floor" then
-				local currentRooms = workspace:FindFirstChild("CurrentRooms")
-				if currentRooms then
-					for _, room in next, currentRooms:GetChildren() do
-						if floorRay:IsDescendantOf(room) and not table.find(enteredRooms, room) then
-							enteredRooms[#enteredRooms + 1] = room
-							task.spawn(entityTable.Debug.OnEntityEnteredRoom, room)
-							if entityTable.Config.BreakLights and ModuleScripts.ModuleEvents then
-								ModuleScripts.ModuleEvents.shatter(room)
-							end
-							break
-						end
-					end
-				end
-			end
+                        for _, v in next, entityModel:GetDescendants() do
+                            if v.ClassName == "Sound" and v.Playing then
+                                v:Stop()
+                            end
+                        end
 
-			-- Rung màn hình khi tới gần
-			local shakeConfig = entityTable.Config.CamShake
-			local shakeMag = (rootPos - entityPos).Magnitude
-			if shakeConfig[1] and shakeMag <= shakeConfig[3] then
-				local shakeRep = {}
-				for i, v in next, shakeConfig[2] do shakeRep[i] = v end
-				shakeRep[1] = shakeConfig[2][1] / shakeConfig[3] * (shakeConfig[3] - shakeMag)
-				if ModuleScripts.MainGame and ModuleScripts.MainGame.camShaker then
-					ModuleScripts.MainGame.camShaker.ShakeOnce(ModuleScripts.MainGame.camShaker, table.unpack(shakeRep))
-				end
-			end
+                        if entityTable.Config.Jumpscare[1] then
+                            Spawner.runJumpscare(entityTable.Config.Jumpscare[2])
+                        end
 
-			-- Xử lý Kill người chơi
-			if playerInSight then
-				local _, onScreen = WorldToViewportPoint(Camera, entityModel.PrimaryPart.Position)
-				if onScreen then task.spawn(entityTable.Debug.OnLookAtEntity) end
+                        task.spawn(entityTable.Debug.OnDeath)
+                        Hum.Health = 0
+                        
+                        local gameStats = ReSt:FindFirstChild("GameStats")
+                        if gameStats and gameStats:FindFirstChild("Player_".. Plr.Name) then
+                            gameStats["Player_".. Plr.Name].Total.DeathCause.Value = entityModel.Name
+                        end
+                        
+                        if #entityTable.Config.CustomDialog > 0 and ReSt:FindFirstChild("RemotesFolder") then
+                            firesignal(ReSt.RemotesFolder.DeathHint.OnClientEvent, entityTable.Config.CustomDialog, "Blue")
+                        end
 
-				if entityTable.Config.CanKill and not Char:GetAttribute("IsDead") and not Char:GetAttribute("Invincible") and (rootPos - entityPos).Magnitude <= entityTable.Config.KillRange then
-					task.spawn(function()
-						if Char:GetAttribute("Hiding") and not entityTable.Config.RUNFORYOURDARNLIFE then return end
-						Char:SetAttribute("IsDead", true)
-						for _, v in next, entityModel:GetDescendants() do
-							if v.ClassName == "Sound" and v.Playing then v:Stop() end
-						end
-						if entityTable.Config.Jumpscare[1] then
-							Spawner.runJumpscare(entityTable.Config.Jumpscare[2])
-						end
-						task.spawn(entityTable.Debug.OnDeath)
-						Hum.Health = 0
-						local gameStats = ReSt:FindFirstChild("GameStats")
-						if gameStats and gameStats:FindFirstChild("Player_".. Plr.Name) then
-							gameStats["Player_".. Plr.Name].Total.DeathCause.Value = entityModel.Name
-						end
-						if #entityTable.Config.CustomDialog > 0 and ReSt:FindFirstChild("RemotesFolder") then
-							firesignal(ReSt.RemotesFolder.DeathHint.OnClientEvent, entityTable.Config.CustomDialog, "Blue")
-						end
-					end)
-				end
-			end
-		end
-	end)
+                        task.spawn(function()
+                            repeat task.wait() until Plr.PlayerGui.MainUI.DeathPanelDead.Visible
+                            for _, v in next, entityModel:GetDescendants() do
+                                if v.ClassName == "Sound" then
+                                    local oldVolume = v.Volume
+                                    v.Volume = 0
+                                    v:Play()
+                                    TS:Create(v, TweenInfo.new(2), {Volume = oldVolume}):Play()
+                                end
+                            end
+                        end)
+                    end)
+                end
+            end
+        end
+    end)
 
-	task.spawn(entityTable.Debug.OnEntityStartMoving)
+    task.spawn(entityTable.Debug.OnEntityStartMoving)
 
-	-- Thực hiện di chuyển THUẦN THEO NODE
-	local cyclesConfig = entityTable.Config.Cycles
-	if entityTable.Config.BackwardsMovement then
-		local inverseNodes = {}
-		for nodeIdx = #nodes, 1, -1 do
-			inverseNodes[#inverseNodes + 1] = nodes[nodeIdx]
-		end
-		nodes = inverseNodes
-	end
+    -- Di chuyển THUẦN THEO NODE
+    local cyclesConfig = entityTable.Config.Cycles
+    if entityTable.Config.BackwardsMovement then
+        local inverseNodes = {}
+        for nodeIdx = #nodes, 1, -1 do
+            inverseNodes[#inverseNodes + 1] = nodes[nodeIdx]
+        end
+        nodes = inverseNodes
+    end
 
-	local maxCycles = math.max(math.random(cyclesConfig.Min, cyclesConfig.Max), 1)
-	for cycle = 1, maxCycles do
-		for nodeIdx = 1, #nodes, 1 do
-			if nodes[nodeIdx] and nodes[nodeIdx].Parent then
-				dragEntity(entityTable, entityModel, nodes[nodeIdx].Position + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0), entityTable.Config.Speed)
-			end
-		end
+    local maxCycles = math.max(math.random(cyclesConfig.Min, cyclesConfig.Max), 1)
+    for cycle = 1, maxCycles do
+        for nodeIdx = 1, #nodes, 1 do
+            if nodes[nodeIdx] then
+                local targetCF = nodes[nodeIdx].CFrame + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0)
+                dragEntity(entityTable, entityModel, targetCF, entityTable.Config.Speed)
+            end
+        end
+        
+        if cyclesConfig.Max > 1 then
+            for nodeIdx = #nodes, 1, -1 do
+                if nodes[nodeIdx] then
+                    local targetCF = nodes[nodeIdx].CFrame + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0)
+                    dragEntity(entityTable, entityModel, targetCF, entityTable.Config.Speed)
+                end
+            end
+        end
 
-		if cyclesConfig.Max > 1 then
-			for nodeIdx = #nodes, 1, -1 do
-				if nodes[nodeIdx] and nodes[nodeIdx].Parent then
-					dragEntity(entityTable, entityModel, nodes[nodeIdx].Position + Vector3.new(0, 3.5 + entityTable.Config.HeightOffset, 0), entityTable.Config.Speed)
-				end
-			end
-		end
+        task.spawn(entityTable.Debug.OnEntityFinishedRebound)
+        if cycle < maxCycles then
+            task.wait(cyclesConfig.WaitTime)
+        end
+    end
 
-		task.spawn(entityTable.Debug.OnEntityFinishedRebound)
-		if cycle < maxCycles then
-			task.wait(cyclesConfig.WaitTime)
-		end
-	end
-
-	-- Dọn dẹp sau khi chạy xong
-	if not entityModel:GetAttribute("NoAI") then
-		for _, v in next, entityTable.Connections do
-			if typeof(v) == "RBXScriptConnection" then v:Disconnect() end
-		end
-		if thing then thing:Disconnect() end
-		entityModel:Destroy()
-		task.spawn(entityTable.Debug.OnEntityDespawned)
-	end
+    if not entityModel:GetAttribute("NoAI") then
+        for _, v in next, entityTable.Connections do
+            if typeof(v) == "RBXScriptConnection" then
+                v:Disconnect()
+            end
+        end
+        if thing then
+            thing:Disconnect()
+        end
+        entityModel:Destroy()
+        task.spawn(entityTable.Debug.OnEntityDespawned)
+    end
 end
 
 Spawner.runJumpscare = function(config)
-	local image1 = safeLoadAssetImage(config.Image1)
-	local image2 = safeLoadAssetImage(config.Image2)
-	local sound1, sound2 = nil, nil
-	if config.Sound1 then pcall(function() sound1 = loadSound(config.Sound1) end) end
-	if config.Sound2 then pcall(function() sound2 = loadSound(config.Sound2) end) end
+    local image1 = safeLoadAssetImage(config.Image1)
+    local image2 = safeLoadAssetImage(config.Image2)
+    
+    local sound1, sound2 = nil, nil
+    if config.Sound1 then
+        pcall(function() sound1 = loadSound(config.Sound1) end)
+    end
+    if config.Sound2 then
+        pcall(function() sound2 = loadSound(config.Sound2) end)
+    end
 
-	local JumpscareGui = Instance.new("ScreenGui")
-	local Background = Instance.new("Frame")
-	local Face = Instance.new("ImageLabel")
+    local JumpscareGui = Instance.new("ScreenGui")
+    local Background = Instance.new("Frame")
+    local Face = Instance.new("ImageLabel")
 
-	JumpscareGui.Name = "JumpscareGui"
-	JumpscareGui.IgnoreGuiInset = true
-	JumpscareGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    JumpscareGui.Name = "JumpscareGui"
+    JumpscareGui.IgnoreGuiInset = true
+    JumpscareGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
-	Background.Name = "Background"
-	Background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	Background.BorderSizePixel = 0
-	Background.Size = UDim2.new(1, 0, 1, 0)
-	Background.ZIndex = 999
+    Background.Name = "Background"
+    Background.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Background.BorderSizePixel = 0
+    Background.Size = UDim2.new(1, 0, 1, 0)
+    Background.ZIndex = 999
 
-	Face.Name = "Face"
-	Face.AnchorPoint = Vector2.new(0.5, 0.5)
-	Face.BackgroundTransparency = 1
-	Face.Position = UDim2.new(0.5, 0, 0.5, 0)
-	Face.ResampleMode = Enum.ResamplerMode.Pixelated
-	Face.Size = UDim2.new(0, 150, 0, 150)
-	Face.Image = image1
-	Face.Parent = Background
-	Background.Parent = JumpscareGui
-	JumpscareGui.Parent = CG
+    Face.Name = "Face"
+    Face.AnchorPoint = Vector2.new(0.5, 0.5)
+    Face.BackgroundTransparency = 1
+    Face.Position = UDim2.new(0.5, 0, 0.5, 0)
+    Face.ResampleMode = Enum.ResamplerMode.Pixelated
+    Face.Size = UDim2.new(0, 150, 0, 150)
+    Face.Image = image1
+    Face.Parent = Background
 
-	local teaseConfig = config.Tease
-	local absHeight = JumpscareGui.AbsoluteSize.Y
-	local minTeaseSize = absHeight / 5
-	local maxTeaseSize = absHeight / 2.5
+    Background.Parent = JumpscareGui
+    JumpscareGui.Parent = CG
 
-	if teaseConfig and teaseConfig[1] then
-		local teaseAmount = math.random(teaseConfig.Min, teaseConfig.Max)
-		if sound1 then pcall(function() sound1:Play() end) end
-		for _ = teaseConfig.Min, teaseAmount do
-			task.wait(math.random(100, 200) / 100)
-			local growFactor = (maxTeaseSize - minTeaseSize) / teaseAmount
-			Face.Size = UDim2.new(0, Face.AbsoluteSize.X + growFactor, 0, Face.AbsoluteSize.Y + growFactor)
-		end
-		task.wait(math.random(100, 200) / 100)
-	end
+    local teaseConfig = config.Tease
+    local absHeight = JumpscareGui.AbsoluteSize.Y
+    local minTeaseSize = absHeight / 5
+    local maxTeaseSize = absHeight / 2.5
 
-	Face.Image = image2
-	Face.Size = UDim2.new(0, maxTeaseSize, 0, maxTeaseSize)
-	if sound2 then pcall(function() sound2:Play() end) end
+    if teaseConfig and teaseConfig[1] then
+        local teaseAmount = math.random(teaseConfig.Min, teaseConfig.Max)
+        if sound1 then pcall(function() sound1:Play() end) end
+        for _ = teaseConfig.Min, teaseAmount do
+            task.wait(math.random(100, 200) / 100)
+            local growFactor = (maxTeaseSize - minTeaseSize) / teaseAmount
+            Face.Size = UDim2.new(0, Face.AbsoluteSize.X + growFactor, 0, Face.AbsoluteSize.Y + growFactor)
+        end
+        task.wait(math.random(100, 200) / 100)
+    end
 
-	TS:Create(Face, TweenInfo.new(0.75), {Size = UDim2.new(0, absHeight * 3, 0, absHeight * 3), ImageTransparency = 0.5}):Play()
-	task.wait(0.75)
+    if config.Flashing and config.Flashing[1] then
+        task.spawn(function()
+            while JumpscareGui and JumpscareGui.Parent do
+                Background.BackgroundColor3 = config.Flashing[2]
+                task.wait(math.random(25, 100) / 1000)
+                Background.BackgroundColor3 = Color3.new(0, 0, 0)
+                task.wait(math.random(25, 100) / 1000)
+            end
+        end)
+    end
 
-	if JumpscareGui then JumpscareGui:Destroy() end
-	if sound1 then pcall(function() sound1:Destroy() end) end
-	if sound2 then pcall(function() sound2:Destroy() end) end
+    if config.Shake then
+        task.spawn(function()
+            local origin = Face.Position
+            while JumpscareGui and JumpscareGui.Parent do
+                Face.Position = origin + UDim2.new(0, math.random(-10, 10), 0, math.random(-10, 10))
+                Face.Rotation = math.random(-5, 5)
+                task.wait()
+            end
+        end)
+    end
+
+    Face.Image = image2
+    Face.Size = UDim2.new(0, maxTeaseSize, 0, maxTeaseSize)
+    if sound2 then pcall(function() sound2:Play() end) end
+
+    TS:Create(Face, TweenInfo.new(0.75), {Size = UDim2.new(0, absHeight * 3, 0, absHeight * 3), ImageTransparency = 0.5}):Play()
+    task.wait(0.75)
+
+    if JumpscareGui then JumpscareGui:Destroy() end
+    if sound1 then pcall(function() sound1:Destroy() end) end
+    if sound2 then pcall(function() sound2:Destroy() end) end
 end
 
 Plr.CharacterAdded:Connect(onCharacterAdded)
+
+if not SpawnerSetup then
+    getgenv().SpawnerSetup = true
+    workspace.DescendantRemoving:Connect(function(des)
+        if des.Name == "PathfindNodes" then
+            task.delay(0.1, function()
+                if des and des.Parent then
+                    des:Clone().Parent = des.Parent
+                end
+            end)
+        end
+    end)
+end
 
 return Spawner
