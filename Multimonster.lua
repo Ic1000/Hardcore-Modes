@@ -662,7 +662,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 
 			TweenService:Create(jumpscareImg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.new(1.2, 0, 1.4, 0),
-				Rotation = math.random(-25, 50)
+				Rotation = math.random(-25, 25)
 			}):Play()
 			
 			task.wait(0.5)
@@ -676,7 +676,10 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 				end)
 			end
 
+						-- FIX: Cho ảnh mờ dần (Fade out) TRƠN TRU NGAY LẬP TỨC cùng lúc thay vì đợi chờ
 			local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })
+			fadeTween:Play()
+			
 			fadeTween.Completed:Connect(SafeCleanup)
 			task.delay(2.5, SafeCleanup)
 			
