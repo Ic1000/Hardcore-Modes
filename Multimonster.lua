@@ -415,7 +415,7 @@ local entity = spawner.Create({
 		Max = math.random(5, 6),
 		Delay = math.random(1, 2)
 	},
-	Damage = { Enabled = true, Range = 60, Amount = 125 },
+	Damage = { Enabled = true, Range = 60, Amount = 1 },
 	Crucifixion = {
 		Enabled = true,
 		Range = 50,
@@ -494,9 +494,9 @@ entity:SetCallback("OnStartMoving", function()
 
 	task.spawn(function()
 		local urls = {
-			{ "https://github.com/cakmay227-svg/random/raw/refs/heads/main/XRecorder_Edited_20260801_01.mp3?raw=true", "jjjciie" },
-			{ "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/Ripper%20bresking%20stuff%202.mp3", "kdjjccj" },
-			{ "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/RipperBreakingstuff3.mp3", "jckdkxjchjjdj" }
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "jjjciie" },
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "kdjjccj" },
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "jckdkxjchjjdj" }
 		}
 		local pick = urls[math.random(1, #urls)]
 		local Github = GetGitSound(pick[1], pick[2])
@@ -535,7 +535,7 @@ entity:SetCallback("OnStartMoving", function()
 			end
 
 			local distance = (ripe.Position - hrp.Position).Magnitude
-			if distance <= 150 then
+			if distance <= 175 then
 				breaking.Volume = 10 
 				if not breaking.IsPlaying then
 					breaking:Play()
