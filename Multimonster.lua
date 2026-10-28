@@ -15,13 +15,20 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local debounce = false
 local isJumpscaring = false
-local totalRoomsBroken = 0
-local destroysounds = false
 local multimonsterIsMoving = false
 
--- Biến lưu trữ âm thanh cửa để dễ dàng quản lý (dừng hoặc xóa)
-local doorSound1 = nil
-local doorSound2 = nil
+-- Khai báo biến âm thanh cửa an toàn
+if multimonsterIsMoving then
+local doorSound1 = Instance.new("Sound")
+doorSound1.SoundId = "rbxassetid://9126281820"
+doorSound1.Volume = 3
+doorSound1.Parent = SoundService
+
+local doorSound2 = Instance.new("Sound")
+doorSound2.SoundId = "rbxassetid://9126281769"
+doorSound2.Volume = 3
+doorSound2.Parent = SoundService
+end
 
 -- Biến lưu trữ hướng di chuyển của thực thể (tính theo frame)
 local entityLastPosition = nil
@@ -62,38 +69,6 @@ local function GetGitSound(GithubSnd, SoundName)
 	
 	sound.SoundId = GithubSnd
 	return sound
-end
-
--- Hàm khởi tạo âm thanh cửa an toàn
-local function PlayDoorSounds()
-	if destroysounds then return end
-	
-	pcall(function()
-		if not doorSound1 or not doorSound1.Parent then
-			doorSound1 = Instance.new("Sound")
-			doorSound1.SoundId = "rbxassetid://9126281820"
-			doorSound1.Volume = 3
-			doorSound1.Parent = SoundService
-		end
-		doorSound1:Play()
-	end)
-
-	pcall(function()
-		if not doorSound2 or not doorSound2.Parent then
-			doorSound2 = Instance.new("Sound")
-			doorSound2.SoundId = "rbxassetid://9126281769"
-			doorSound2.Volume = 3
-			doorSound2.Parent = SoundService
-		end
-		doorSound2:Play()
-	end)
-end
-
-local function StopDoorSounds()
-	pcall(function()
-		if doorSound1 then doorSound1:Stop() end
-		if doorSound2 then doorSound2:Stop() end
-	end)
 end
 
 -- Tải CustomAchievements theo đúng chuẩn hàm của Vynixu
@@ -189,7 +164,7 @@ local function shakeCollision(collision, customDir)
 		sound.SoundId = breakSounds[math.random(1, #breakSounds)]
 		sound.Volume = math.random(14, 26) / 10
 		sound.PlaybackSpeed = math.random(80, 120) / 100
-		sound.RollOffMaxDistance = 120
+		sound.RollOffMaxDistance = 100
 		sound.Parent = collision
 		sound:Play()
 		sound.Ended:Connect(function()
@@ -309,7 +284,6 @@ end
 
 local function BreakRoom(room)
 	if not room then return end
-	totalRoomsBroken = totalRoomsBroken + 1
 	
 	task.spawn(function()
 		task.wait(0.02)
@@ -324,13 +298,12 @@ local function BreakRoom(room)
 			"rbxassetid://2612674531", 
 			"rbxassetid://2174790942"
 		}
-
-		if not destroysounds and totalRoomsBroken == 1 then
-			breakSound.SoundId = "rbxassetid://9125992545"
-			breakSound.Volume = 4.5
+		
+		breakSound.SoundId = breakSoundsList[math.random(1, #breakSoundsList)]
+		if multimonsterIsMoving then
+			breakSound.Volume = math.random(28, 38) / 10 
 		else
-			breakSound.SoundId = breakSoundsList[math.random(1, #breakSoundsList)]
-			breakSound.Volume = math.random(28, 38) / 10
+			breakSound.Volume = 1
 		end
 
 		breakSound.Parent = assetContainer
@@ -362,6 +335,10 @@ end
 local function TriggerExtremeShake()
 	task.spawn(function()
 		pcall(function()
+			local character = LocalPlayer.Character
+			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+			if humanoid and humanoid.Health <= 0 then return end
+			
 			local CameraShakerModule = require(ReplicatedStorage:WaitForChild("CameraShaker", 5))
 			local camera = Workspace.CurrentCamera
 			if CameraShakerModule and camera then
@@ -415,7 +392,7 @@ local entity = spawner.Create({
 		Max = math.random(5, 6),
 		Delay = math.random(1, 2)
 	},
-	Damage = { Enabled = true, Range = 60, Amount = 1 },
+	Damage = { Enabled = true, Range = 60, Amount = 125 },
 	Crucifixion = {
 		Enabled = true,
 		Range = 50,
@@ -494,9 +471,9 @@ entity:SetCallback("OnStartMoving", function()
 
 	task.spawn(function()
 		local urls = {
-			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "jjjciie" },
-			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "kdjjccj" },
-			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreakstuff1.mp3", "jckdkxjchjjdj" }
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak2.mp3", "ripbreak2" },
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/Ripperbreak3.mp3", "ripbreak3" },
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak1.mp3", "ripbreak1" }
 		}
 		local pick = urls[math.random(1, #urls)]
 		local Github = GetGitSound(pick[1], pick[2])
@@ -535,7 +512,7 @@ entity:SetCallback("OnStartMoving", function()
 			end
 
 			local distance = (ripe.Position - hrp.Position).Magnitude
-			if distance <= 175 then
+			if distance <= 100 then
 				breaking.Volume = 10 
 				if not breaking.IsPlaying then
 					breaking:Play()
@@ -568,10 +545,12 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 	if not character:GetAttribute("Hiding") and not debounce then
 		debounce = true
 		isJumpscaring = true
-		destroysounds = true
 		
-		-- Dừng ngay âm thanh cửa khi player chết
-		StopDoorSounds()
+		-- Dừng âm thanh cửa và âm thanh GitHub khi người chơi dính đòn / chết
+		pcall(function()
+			doorSound1:Stop()
+			doorSound2:Stop()
+		end)
        
 		pcall(function()
 			for _, v in pairs(womp:GetDescendants()) do
@@ -666,7 +645,9 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			}):Play()
 			
 			task.wait(0.5)
-			isJumpscaring = false						
+			isJumpscaring = false	
+
+           local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })					
 
 			local function SafeCleanup()
 				pcall(function()
@@ -676,8 +657,6 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 				end)
 			end
 
-						-- FIX: Cho ảnh mờ dần (Fade out) TRƠN TRU NGAY LẬP TỨC cùng lúc thay vì đợi chờ
-			local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })
 			fadeTween:Play()
 			
 			fadeTween.Completed:Connect(SafeCleanup)
@@ -696,7 +675,8 @@ end)
 entity:SetCallback("OnEnterRoom", function(room, firstTime)
 	if room then
 		BreakRoom(room)
-		PlayDoorSounds()
+		doorSound1:Play()
+		doorSound2:Play()
 	end
 end)
 
@@ -704,9 +684,12 @@ entity:SetCallback("OnDespawned", function()
 	print("multimonster has despawned")
 	TriggerExtremeShake()
 	multimonsterIsMoving = false
-	destroysounds = false
-
-	StopDoorSounds()
+	
+	-- Dừng âm thanh cửa và âm thanh GitHub khi biến mất bình thường
+	pcall(function()
+		doorSound1:Stop()
+		doorSound2:Stop()
+	end)
 	
 	GiveMultimonsterAchievement()
 
