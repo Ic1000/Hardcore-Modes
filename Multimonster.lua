@@ -408,7 +408,19 @@ local entity = spawner.Create({
 
 ---====== Callbacks ======---
 entity:SetCallback("OnSpawned", function()
-	print("multimonster has spawned")
+	
+		local workspace = game:GetService("Workspace")
+
+local customScream = Instance.new("Sound")
+customScream.SoundId = "rbxassetid://112497140615036"
+customScream.Parent = workspace
+customScream.Volume = 4
+customScream:Play()
+
+customScream.Ended:Connect(function()
+    customScream:Destroy()
+end)
+		
 	multimonsterIsMoving = false
 	entityLastPosition = nil
 	
