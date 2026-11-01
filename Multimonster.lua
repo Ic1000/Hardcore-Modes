@@ -9,6 +9,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -16,9 +17,10 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local debounce = false
 local isJumpscaring = false
 local multimonsterIsMoving = false
+local destroyedsounds = false
+local gotbadge = false
 
 -- Khai báo biến âm thanh cửa an toàn
-if multimonsterIsMoving then
 local doorSound1 = Instance.new("Sound")
 doorSound1.SoundId = "rbxassetid://9126281820"
 doorSound1.Volume = 3
@@ -28,7 +30,6 @@ local doorSound2 = Instance.new("Sound")
 doorSound2.SoundId = "rbxassetid://9126281769"
 doorSound2.Volume = 3
 doorSound2.Parent = SoundService
-end
 
 -- Biến lưu trữ hướng di chuyển của thực thể (tính theo frame)
 local entityLastPosition = nil
@@ -71,39 +72,10 @@ local function GetGitSound(GithubSnd, SoundName)
 	return sound
 end
 
--- Tải CustomAchievements theo đúng chuẩn hàm của Vynixu
-local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
-
-if getgenv().MultimonsterAchievementGiven == nil then
-	getgenv().MultimonsterAchievementGiven = false
-end
-
-local function GiveMultimonsterAchievement()
-	if not getgenv().MultimonsterAchievementGiven then
-		getgenv().MultimonsterAchievementGiven = true
-		pcall(function()
-			achievementGiver({
-				Title = "A Nostalgic Frights...",
-				Desc = "I will come back more...",
-				Reason = "Survive the rare Entity Designed as Multimonster.",
-				Image = "rbxassetid://132714224363069"
-			})
-		end)
-	end
-end
-
 --========================================================--
 -- ADVANCED DIRECTIONAL PUSHABLE ROOM BREAK               --
 --========================================================--
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
-local breakSounds = {
-	"rbxassetid://9125992545",
-	"rbxassetid://4004052860",
-	"rbxassetid://7142857558", 
-	"rbxassetid://7142843615",
-	"rbxassetid://2612674531",
-	"rbxassetid://2174790942"
-}
 
 local blacklist = {
 	"wardrobe", "rafter", "bed", "rug", "carpet", "sideroom", "key", 
@@ -158,19 +130,6 @@ end
 
 local function shakeCollision(collision, customDir)
 	if not collision or collision.Anchored then return end
-	
-	pcall(function()
-		local sound = Instance.new("Sound")
-		sound.SoundId = breakSounds[math.random(1, #breakSounds)]
-		sound.Volume = math.random(14, 26) / 10
-		sound.PlaybackSpeed = math.random(80, 120) / 100
-		sound.RollOffMaxDistance = 100
-		sound.Parent = collision
-		sound:Play()
-		sound.Ended:Connect(function()
-			sound:Destroy()
-		end)
-	end)
 
 	local mass = collision.AssemblyMass
 	local force = mass * 18 
@@ -289,6 +248,7 @@ local function BreakRoom(room)
 		task.wait(0.02)
 		local assetContainer = room:FindFirstChild("Assets") or room
 
+		-- Khởi tạo âm thanh phá phòng an toàn
 		local breakSound = Instance.new("Sound")
 		local breakSoundsList = {
 			"rbxassetid://9125992545", 
@@ -300,7 +260,10 @@ local function BreakRoom(room)
 		}
 		
 		breakSound.SoundId = breakSoundsList[math.random(1, #breakSoundsList)]
-		if multimonsterIsMoving then
+
+		-- Kiểm tra logic âm thanh vỡ đồ
+		if not destroyedsounds then
+			destroyedsounds = true
 			breakSound.Volume = math.random(28, 38) / 10 
 		else
 			breakSound.Volume = 1
@@ -308,7 +271,9 @@ local function BreakRoom(room)
 
 		breakSound.Parent = assetContainer
 		breakSound:Play()
-		breakSound.Ended:Connect(function() breakSound:Destroy() end)
+		breakSound.Ended:Connect(function() 
+			breakSound:Destroy() 
+		end)
 
 		local targets = {}
 		for _, v in ipairs(room:GetDescendants()) do
@@ -346,10 +311,41 @@ local function TriggerExtremeShake()
 					camera.CFrame = camera.CFrame * cf
 				end)
 				despawnShake:Start()
-				despawnShake:ShakeOnce(35, 25, 0.05, 5)
+				despawnShake:ShakeOnce(40, 30, 3, 6)
 			end
 		end)
 	end)
+end
+
+local customScream = Instance.new("Sound")
+	customScream.Name = "CustomSpawnScream"
+	customScream.SoundId = "rbxassetid://112497140615036"
+	customScream.Volume = 10 -- Đẩy âm lượng cực đại để đè lên các âm thanh khác
+	customScream.Parent = SoundService 
+
+	-- Dùng PreloadAsync để ép game tải và ưu tiên phát lập tức
+	ContentProvider:PreloadAsync({customScream}, function()
+		customScream:Play()
+	end)
+	
+	local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
+
+if getgenv().MultimonsterAchievementGiven == nil then
+	getgenv().MultimonsterAchievementGiven = false
+end
+
+local function GiveMultimonsterAchievement()
+	if not getgenv().MultimonsterAchievementGiven then
+		getgenv().MultimonsterAchievementGiven = true
+		pcall(function()
+			achievementGiver({
+				Title = "A Nostalgic Frights...",
+				Desc = "Might Come Back...",
+				Reason = "Survive the rare Entity Designed as Multimonster.",
+				Image = "rbxassetid://100946605902758"
+			})
+		end)
+	end
 end
 
 --========================================================--
@@ -407,20 +403,7 @@ local entity = spawner.Create({
 })
 
 ---====== Callbacks ======---
-entity:SetCallback("OnSpawned", function()
-	
-		local workspace = game:GetService("Workspace")
-
-local customScream = Instance.new("Sound")
-customScream.SoundId = "rbxassetid://112497140615036"
-customScream.Parent = workspace
-customScream.Volume = 4
-customScream:Play()
-
-customScream.Ended:Connect(function()
-    customScream:Destroy()
-end)
-		
+entity:SetCallback("OnSpawned", function()		
 	multimonsterIsMoving = false
 	entityLastPosition = nil
 	
@@ -484,7 +467,7 @@ entity:SetCallback("OnStartMoving", function()
 	task.spawn(function()
 		local urls = {
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak2.mp3", "ripbreak2" },
-			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/Ripperbreak3.mp3", "ripbreak3" },
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreak3.mp3", "ripbreak3" },
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak1.mp3", "ripbreak1" }
 		}
 		local pick = urls[math.random(1, #urls)]
@@ -557,12 +540,6 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 	if not character:GetAttribute("Hiding") and not debounce then
 		debounce = true
 		isJumpscaring = true
-		
-		-- Dừng âm thanh cửa và âm thanh GitHub khi người chơi dính đòn / chết
-		pcall(function()
-			doorSound1:Stop()
-			doorSound2:Stop()
-		end)
        
 		pcall(function()
 			for _, v in pairs(womp:GetDescendants()) do
@@ -640,6 +617,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			jumpscareImg.BackgroundTransparency = 1
 			jumpscareImg.Image = randomSelectedImage
 			jumpscareImg.ImageTransparency = 0
+			jumpscareImg.ImageColor3 = Color3.fromRGB(255, 0, 0) -- <--- ĐÃ ÉP SANG MÀU ĐỎ RỰC Ở ĐÂY NÈ FEN!
 			
 			local colorCorrection = Instance.new("ColorCorrectionEffect", Lighting)
 			TweenService:Create(colorCorrection, TweenInfo.new(0.2), {
@@ -653,7 +631,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 
 			TweenService:Create(jumpscareImg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.new(1.2, 0, 1.4, 0),
-				Rotation = math.random(-25, 25)
+				Rotation = math.random(-20, 20)
 			}):Play()
 			
 			task.wait(0.5)
@@ -704,7 +682,7 @@ entity:SetCallback("OnDespawned", function()
 	end)
 	
 	GiveMultimonsterAchievement()
-
+	
 	local lighting = Lighting:FindFirstChild("MainColorCorrection")
 	if not lighting then
 		lighting = Instance.new("ColorCorrectionEffect")
