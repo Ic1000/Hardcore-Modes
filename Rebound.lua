@@ -83,6 +83,15 @@ end
 local function MoveRebound()
     isJumpscaring = false
     
+    pcall(function()
+        local jumpscareSound = Instance.new("Sound")
+        jumpscareSound.SoundId = GitAud("https://github.com/Kotyara19k-Doorsspawner/Random-files/raw/main/Y2meta.app%20-%20DOORS%20HARDCORE_REBOUND%20MOVING%20START%20(320%20kbps).mp3", "Moving2")
+        jumpscareSound.Parent = entity
+        jumpscareSound.Volume = 2
+        jumpscareSound.Name = "am"
+        jumpscareSound:Play()
+    end)
+    
     local s = LoadCustomInstance("rbxassetid://94638439855560", workspace)
     if not s then return end
 
@@ -211,15 +220,25 @@ local function MoveRebound()
                     
                     task.wait(0.3)
                     local hum = char:FindFirstChildWhichIsA("Humanoid")
-                    if hum then hum:TakeDamage(100) end
+                     if hum then hum.Health = 100 end
 
                     pcall(function()
-                        ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = "Rebound"
-                        ReplicatedStorage.Bricks.DeathHint.OnClientEvent:Fire({
-                            "You died to who you call Rebound...",
-                            "He makes his presence known and keeps coming back...",
-                            "Hide when this happens!"
-                        })
+                        local gameStats = ReplicatedStorage:FindFirstChild("GameStats")
+                        if gameStats then
+                            local playerStat = gameStats:FindFirstChild("Player_" .. LocalPlayer.Name)
+                            if playerStat and playerStat:FindFirstChild("Total") and playerStat.Total:FindFirstChild("DeathCause") then
+                                playerStat.Total.DeathCause.Value = "Rebound"
+                            end
+                        end
+                        
+                        local remotesFolder = ReplicatedStorage:FindFirstChild("RemotesFolder") or ReplicatedStorage:FindFirstChild("Bricks")
+                        if remotesFolder and remotesFolder:FindFirstChild("DeathHint") then
+                            firesignal(remotesFolder.DeathHint.OnClientEvent, {
+                                "You died to who you call Rebound...",
+                                "He makes his presence known and keeps coming back...",
+                                "Hide when this happens!"
+                            }, "Blue")
+                        end
                     end)
 
                     task.wait(0.5)
@@ -292,6 +311,8 @@ local function RunReboundSequence()
 
     reboundCount = 0
     local currentMax = maxRebounds
+    
+    task.wait(2)
 
     -- 4. Bắt đầu di chuyển
     pcall(MoveRebound)
@@ -304,7 +325,25 @@ local function RunReboundSequence()
     end
 
     task.wait(5)
-    Warn:Destroy()
+
+    -- 5. Tween chuyển hiệu ứng màu về bình thường mượt mà
+    local fadeOutInfo = TweenInfo.new(2.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local fadeTween = TweenService:Create(Warn, fadeOutInfo, {
+        TintColor = Color3.fromRGB(255, 255, 255),
+        Saturation = 0,
+        Contrast = 0,
+        Brightness = 0
+    })
+    
+    fadeTween:Play()
+    
+    fadeTween.Completed:Connect(function()
+        if Warn and Warn.Parent then
+            Warn:Destroy()
+        end
+    end)
+    
+    Debris:AddItem(Warn, 7)
 end
 
 -- Kích hoạt thực thể Rebound
