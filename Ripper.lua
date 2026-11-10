@@ -58,20 +58,31 @@ end
 print("[RIPPER] Spawner loaded")
 
 --========================================================--
--- HELPER: GET GIT SOUND (TẢI ÂM THANH TỪ GITHUB)
+-- HELPER: GET GIT SOUND (ĐÃ FIX AN TOÀN CHO MOBILE/DELTA)
 --========================================================--
 
 local function GetGitSound(GithubSnd, SoundName)
 	local url = GithubSnd
-	if not isfile(SoundName .. ".mp3") then
-		pcall(function()
-			writefile(SoundName .. ".mp3", game:HttpGet(url))
-		end)
-	end
 	local sound = Instance.new("Sound")
+	
 	pcall(function()
-		sound.SoundId = (getcustomasset or getsynasset)(SoundName .. ".mp3")
+		-- Kiểm tra xem executor có hỗ trợ các hàm quản lý file hay không
+		if typeof(isfile) == "function" and typeof(writefile) == "function" then
+			if not isfile(SoundName .. ".mp3") then
+				writefile(SoundName .. ".mp3", game:HttpGet(url))
+			end
+			local assetFunc = getcustomasset or getsynasset
+			if typeof(assetFunc) == "function" then
+				sound.SoundId = assetFunc(SoundName .. ".mp3")
+			else
+				sound.SoundId = url
+			end
+		else
+			-- Nếu executor mobile không hỗ trợ file, tự động gán trực tiếp URL để không bị lỗi nil value
+			sound.SoundId = url
+		end
 	end)
+	
 	return sound
 end
 
