@@ -16,9 +16,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local debounce = false
 local isJumpscaring = false
-local multimonsterIsMoving = false
 local destroyedsounds = false
-local gotbadge = false
 
 -- Khai báo biến âm thanh cửa an toàn
 local doorSound1 = Instance.new("Sound")
@@ -73,9 +71,10 @@ local function GetGitSound(GithubSnd, SoundName)
 end
 
 --========================================================--
--- ADVANCED DIRECTIONAL PUSHABLE ROOM BREAK               --
+-- ADVANCED DIRECTIONAL PUSHABLE ROOM BREAK (TỪ SCRIPT FEN) --
 --========================================================--
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
+local TARGET_MASS = 0
 
 local blacklist = {
 	"wardrobe", "rafter", "bed", "rug", "carpet", "sideroom", "key", 
@@ -128,21 +127,23 @@ local function hasTargetParent(model, room)
 	return false
 end
 
-local function shakeCollision(collision, customDir)
+local function shakeCollision(collision)
 	if not collision or collision.Anchored then return end
-
 	local mass = collision.AssemblyMass
-	local force = mass * 18 
-
-	local pushDir = customDir or entityMoveDirection
-	pushDir = Vector3.new(pushDir.X, math.clamp(pushDir.Y, 0.1, 0.5), pushDir.Z).Unit
-
+	local force = mass * 5 
 	for i = 1, 8 do
 		if collision.Parent and not collision.Anchored then
-			local randomizedDir = (pushDir + Vector3.new(math.random(-20,20)/100, math.random(0,20)/100, math.random(-20,20)/100)).Unit
-			collision:ApplyImpulse(randomizedDir * force)
-			collision:ApplyAngularImpulse(Vector3.new(math.random(-3, 3), math.random(-3, 3), math.random(-3, 3)) * mass * 20)
-			task.wait(0.025)
+			local look = entityMoveDirection
+			look = Vector3.new(look.X, 0, look.Z)
+			if look.Magnitude > 0 then
+				look = look.Unit
+				local angle = math.rad(math.random(-60, 60))
+				local direction = CFrame.fromAxisAngle(Vector3.yAxis, angle):VectorToWorldSpace(look)
+				direction = Vector3.new(direction.X, 0, direction.Z).Unit
+				collision:ApplyImpulse(direction * force)
+				collision:ApplyAngularImpulse(Vector3.new(math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)) * mass * 15)
+			end
+			task.wait(0.03)
 		end
 	end
 end
@@ -151,26 +152,22 @@ local function setupModel(model, room, targets)
 	if not model:IsA("Model") or isBlacklisted(model) or hasTargetParent(model, room) then return end
 
 	local existingCollision
-
+	local hasScriptCollision = false
 	for _, v in ipairs(model:GetDescendants()) do
 		if v:IsA("BasePart") and v.Name == "Collision" and v:GetAttribute("WindCollision") == true then
-			existingCollision = v
-			break
+			hasScriptCollision = true
+			if v:GetAttribute("Picked") ~= true then
+				existingCollision = v
+				break
+			end
 		end
 	end
 
 	if existingCollision then 
-		existingCollision.Anchored = false
-		local currentPushDir = entityMoveDirection
-		existingCollision.AssemblyLinearVelocity = (currentPushDir * math.random(80, 120)) + Vector3.new(0, math.random(20, 50), 0)
-		existingCollision.AssemblyAngularVelocity = Vector3.new(
-			math.random(-40, 40),
-			math.random(-40, 40),
-			math.random(-40, 40)
-		)
 		table.insert(targets, existingCollision) 
 		return 
 	end
+	if hasScriptCollision then return end
 
 	local parts = {}
 	for _, v in ipairs(model:GetDescendants()) do
@@ -185,12 +182,12 @@ local function setupModel(model, room, targets)
 	local volume = size.X * size.Y * size.Z
 	if volume <= 0 then return end
 
-	local density = math.clamp(10 / volume, 0.0001, 1)
+	local density = math.clamp(TARGET_MASS / volume, 0.0001, 100)
 
 	local collision = Instance.new("Part")
 	collision.Name = "Collision"
-	collision.Size = size - Vector3.new(0.4, 0.4, 0.4)
-	collision.CFrame = cf + Vector3.new(0, 0.2, 0)
+	collision.Size = size
+	collision.CFrame = cf
 	collision.Transparency = 1
 	collision.CanCollide = true
 	collision.CanTouch = true
@@ -199,20 +196,16 @@ local function setupModel(model, room, targets)
 	collision.Anchored = true
 	collision.Massless = false
 	
-	collision.CustomPhysicalProperties = PhysicalProperties.new(density, 0.01, 0.1, 1, 1)
+	collision.CustomPhysicalProperties = PhysicalProperties.new(density, 0.3, 0.5, 1, 1)
 	collision:SetAttribute("WindCollision", true)
+	collision:SetAttribute("Picked", false)
 	collision.Parent = model
 
 	table.insert(targets, collision)
 
 	collision:GetPropertyChangedSignal("Anchored"):Connect(function()
 		if not collision.Anchored then
-			pcall(function()
-				if collision:CanSetNetworkOwnership() then
-					collision:SetNetworkOwner(LocalPlayer)
-				end
-			end)
-			task.spawn(shakeCollision, collision, entityMoveDirection)
+			task.spawn(shakeCollision, collision)
 		end
 	end)
 
@@ -248,7 +241,6 @@ local function BreakRoom(room)
 		task.wait(0.02)
 		local assetContainer = room:FindFirstChild("Assets") or room
 
-		-- Khởi tạo âm thanh phá phòng an toàn
 		local breakSound = Instance.new("Sound")
 		local breakSoundsList = {
 			"rbxassetid://9125992545", 
@@ -261,7 +253,6 @@ local function BreakRoom(room)
 		
 		breakSound.SoundId = breakSoundsList[math.random(1, #breakSoundsList)]
 
-		-- Kiểm tra logic âm thanh vỡ đồ
 		if not destroyedsounds then
 			destroyedsounds = true
 			breakSound.Volume = math.random(28, 38) / 10 
@@ -286,11 +277,12 @@ local function BreakRoom(room)
 		for _, collision in ipairs(targets) do
 			if collision and collision.Parent and collision:GetAttribute("WindCollision") == true then
 				collision.Anchored = false
-				collision.AssemblyLinearVelocity = (currentDir * math.random(70, 110)) + Vector3.new(0, math.random(25, 55), 0)
+				-- Tinh chỉnh lực văng nhẹ nhàng theo hướng đi, không bay vọt lên trời
+				collision.AssemblyLinearVelocity = (currentDir * math.random(50, 90)) + Vector3.new(0, math.random(15, 35), 0)
 				collision.AssemblyAngularVelocity = Vector3.new(
-					math.random(-35, 35),
-					math.random(-35, 35),
-					math.random(-35, 35)
+					math.random(-25, 25),
+					math.random(-25, 25),
+					math.random(-25, 25)
 				)
 			end
 		end
@@ -318,17 +310,16 @@ local function TriggerExtremeShake()
 end
 
 local customScream = Instance.new("Sound")
-	customScream.Name = "CustomSpawnScream"
-	customScream.SoundId = "rbxassetid://112497140615036"
-	customScream.Volume = 10 -- Đẩy âm lượng cực đại để đè lên các âm thanh khác
-	customScream.Parent = SoundService 
+customScream.Name = "CustomSpawnScream"
+customScream.SoundId = "rbxassetid://112497140615036"
+customScream.Volume = 10
+customScream.Parent = SoundService 
 
-	-- Dùng PreloadAsync để ép game tải và ưu tiên phát lập tức
-	ContentProvider:PreloadAsync({customScream}, function()
-		customScream:Play()
-	end)
-	
-	local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
+ContentProvider:PreloadAsync({customScream}, function()
+	customScream:Play()
+end)
+
+local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
 
 if getgenv().MultimonsterAchievementGiven == nil then
 	getgenv().MultimonsterAchievementGiven = false
@@ -391,12 +382,12 @@ local entity = spawner.Create({
 	Damage = { Enabled = true, Range = 60, Amount = 125 },
 	Crucifixion = {
 		Enabled = true,
-		Range = 50,
+		Range = 60,
 		Resist = false,
 		Break = true
 	},
 	Death = {
-		Type = "Guiding",
+		Type = "Curious",
 		Hints = {"You fell victim to Multimonster...", "It travels at terrifying speeds across multiple rooms...", "Listen closely for its loud approach and hide immediately...", "Do not let it catch you in its line of sight!..."},
 		Cause = "Multimonster"
 	}
@@ -462,7 +453,6 @@ end)
 
 entity:SetCallback("OnStartMoving", function()
 	print("multimonster has started moving")
-	multimonsterIsMoving = true
 
 	task.spawn(function()
 		local urls = {
@@ -508,7 +498,7 @@ entity:SetCallback("OnStartMoving", function()
 
 			local distance = (ripe.Position - hrp.Position).Magnitude
 			if distance <= 100 then
-				breaking.Volume = 10 
+				breaking.Volume = 6
 				if not breaking.IsPlaying then
 					breaking:Play()
 				end
@@ -617,7 +607,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			jumpscareImg.BackgroundTransparency = 1
 			jumpscareImg.Image = randomSelectedImage
 			jumpscareImg.ImageTransparency = 0
-			jumpscareImg.ImageColor3 = Color3.fromRGB(255, 0, 0) -- <--- ĐÃ ÉP SANG MÀU ĐỎ RỰC Ở ĐÂY NÈ FEN!
+			jumpscareImg.ImageColor3 = Color3.fromRGB(255, 0, 0)
 			
 			local colorCorrection = Instance.new("ColorCorrectionEffect", Lighting)
 			TweenService:Create(colorCorrection, TweenInfo.new(0.2), {
@@ -637,7 +627,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			task.wait(0.5)
 			isJumpscaring = false	
 
-           local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })					
+			local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })					
 
 			local function SafeCleanup()
 				pcall(function()
@@ -648,7 +638,6 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			end
 
 			fadeTween:Play()
-			
 			fadeTween.Completed:Connect(SafeCleanup)
 			task.delay(2.5, SafeCleanup)
 			
@@ -675,7 +664,6 @@ entity:SetCallback("OnDespawned", function()
 	TriggerExtremeShake()
 	multimonsterIsMoving = false
 	
-	-- Dừng âm thanh cửa và âm thanh GitHub khi biến mất bình thường
 	pcall(function()
 		doorSound1:Stop()
 		doorSound2:Stop()
