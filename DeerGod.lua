@@ -31,6 +31,8 @@ local isDeactivated = false -- Biến cờ ngắt toàn bộ hệ thống
 local currentTween = nil
 local nodeConnection = nil
 
+local speed = getgenv().FasterTrouble and 3.5 or 4
+
 -- Tải Module CustomAchievements
 local CustomAchievements = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
 
@@ -400,7 +402,7 @@ task.spawn(function()
                 if character:GetAttribute("Hiding") then break end
                 
                 if currentTween then pcall(function() currentTween:Cancel() end) end
-                currentTween = TweenService:Create(ambush, TweenInfo.new(2), {CFrame = HumanoidRootPart.CFrame})
+                currentTween = TweenService:Create(ambush, TweenInfo.new(speed - 2), {CFrame = HumanoidRootPart.CFrame})
                 currentTween:Play()
                 task.wait(1)
             end
@@ -421,7 +423,7 @@ task.spawn(function()
         if hit or isDeactivated or not targetRoom or not targetRoom:FindFirstChild("RoomEntrance") then return end
         
         if currentTween then pcall(function() currentTween:Cancel() end) end
-        currentTween = TweenService:Create(ambush, TweenInfo.new(3.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {CFrame = targetRoom.RoomEntrance.CFrame})
+        currentTween = TweenService:Create(ambush, TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {CFrame = targetRoom.RoomEntrance.CFrame})
         currentTween:Play()
         currentTween.Completed:Wait()
     end
@@ -435,7 +437,7 @@ task.spawn(function()
 
     if not hit and not isDeactivated and nextroom and nextroom:FindFirstChild("RoomExit") then
         if currentTween then pcall(function() currentTween:Cancel() end) end
-        currentTween = TweenService:Create(ambush, TweenInfo.new(3.5, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {CFrame = nextroom.RoomExit.CFrame})
+        currentTween = TweenService:Create(ambush, TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out), {CFrame = nextroom.RoomExit.CFrame})
         currentTween:Play()
         currentTween.Completed:Wait()
     end
