@@ -11,8 +11,9 @@ local root = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 
 --// SETTINGS
+local delay = getgenv().FasterTrouble and 1 or 2
 local DAMAGE = 30
-local ATTACK_DELAY = 2
+local ATTACK_DELAY = delay
 local LOOK_THRESHOLD = 0.65
 
 --// Khởi tạo biến cờ toàn cục chống nhận trùng lặp thành tựu trong ván chơi
