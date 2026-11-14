@@ -106,11 +106,6 @@ task.spawn(function()
 		if CollisionClone then
 			CollisionClone.Massless = true
 		end
-		pcall(function()
-			if remotesFolder and remotesFolder:FindFirstChild("Crouch") then
-				remotesFolder.Crouch:FireServer(true, true)
-			end
-		end)
 	end
 end)
 
