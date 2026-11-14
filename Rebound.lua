@@ -79,6 +79,8 @@ local function LoadCustomInstance(assetId, parent)
     return model
 end
 
+local speed = getgenv().FasterTrouble and 1.4 or 1.8
+
 -- ====== MOVEMENT & JUMPSCARE LOGIC ======
 local function MoveRebound()
     isJumpscaring = false
@@ -87,7 +89,7 @@ local function MoveRebound()
         local jumpscareSound = Instance.new("Sound")
         jumpscareSound.SoundId = GitAud("https://github.com/Kotyara19k-Doorsspawner/Random-files/raw/main/Y2meta.app%20-%20DOORS%20HARDCORE_REBOUND%20MOVING%20START%20(320%20kbps).mp3", "Moving2")
         jumpscareSound.Parent = entity
-        jumpscareSound.Volume = 2
+        jumpscareSound.Volume = 5
         jumpscareSound.Name = "am"
         jumpscareSound:Play()
     end)
@@ -220,7 +222,7 @@ local function MoveRebound()
                     
                     task.wait(0.3)
                     local hum = char:FindFirstChildWhichIsA("Humanoid")
-                     if hum then hum.Health = 100 end
+                     if hum then hum.Health = 0 end
 
                     pcall(function()
                         local gameStats = ReplicatedStorage:FindFirstChild("GameStats")
@@ -257,7 +259,7 @@ local function MoveRebound()
                 local room = gruh[i]
                 if room:FindFirstChild("RoomEntrance") then
                     local a = room.RoomEntrance
-                    local tween = TweenService:Create(entity, TweenInfo.new(1.8, Enum.EasingStyle.Sine), {CFrame = a.CFrame})
+                    local tween = TweenService:Create(entity, TweenInfo.new(speed, Enum.EasingStyle.Sine), {CFrame = a.CFrame})
                     tween:Play()
                     tween.Completed:Wait()
                 end
@@ -269,7 +271,7 @@ local function MoveRebound()
                 local room = gruh[i]
                 if room:FindFirstChild("RoomExit") then
                     local a = room.RoomExit
-                    local tween = TweenService:Create(entity, TweenInfo.new(1.8, Enum.EasingStyle.Sine), {CFrame = a.CFrame})
+                    local tween = TweenService:Create(entity, TweenInfo.new(speed, Enum.EasingStyle.Sine), {CFrame = a.CFrame})
                     tween:Play()
                     tween.Completed:Wait()
                 end
