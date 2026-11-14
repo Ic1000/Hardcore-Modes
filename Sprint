@@ -8,23 +8,25 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Đọc cấu hình từ _G.mobile_sprint_config
+-- Đọc cấu hình: chỉ giữ lại usewhileloading theo yêu cầu
 local cfg = _G.mobile_sprint_config or {}
 local CONFIG = {
 	usewhileloading = cfg.usewhileloading ~= nil and cfg.usewhileloading or true,
-	maxstamina = cfg.maxstamina or 150,
-	staminadrain = cfg.staminadrain or 20,
-	staminaregen = cfg.staminaregen or 15,
-	regendelay = cfg.regendelay or 1.5,
-	sprintboost = cfg.sprintboost or 5,
-	overlaydarkness = cfg.overlaydarkness or 0.4,
-	soundvolume = cfg.soundvolume or 3,
+	maxstamina = 150,
+	staminadrain = 20,
+	staminaregen = 15,
+	regendelay = 1.5,
+	sprintboost = 5,
+	overlaydarkness = 0.4,
+	soundvolume = 3,
 }
 
 local stamina = CONFIG.maxstamina
 local isSprinting = false
 local isExhausted = false
 local lastSprintTime = 0
+
+-- Mình Đã Chỉnh Phù Hợp Lại Rồi
 
 -- Tạo Sound Kiệt Sức
 local soundExhausted = Instance.new("Sound")
@@ -180,6 +182,10 @@ if UserInputService.TouchEnabled then
 	end
 
 	local function startSprinting()
+		-- Chặn khi đang chết, đang chui tủ (Hiding), hoặc đang ngồi (Crouching) -> Đã thêm đủ dấu ngoặc đóng ở đây
+		if not humanoid or humanoid.Health <= 0 then return end
+		if character and (character:GetAttribute("Hiding") == true or character:GetAttribute("Crouching") == true) then return end
+		
 		local isGameLoaded = game:IsLoaded()
 		if not isGameLoaded and not CONFIG.usewhileloading then return end
 		if isExhausted or stamina <= 0 then return end
@@ -203,6 +209,19 @@ if UserInputService.TouchEnabled then
 	end)
 
 	RunService.Heartbeat:Connect(function(deltaTime)
+		-- Kiểm tra xem người chơi có đang ngồi/cúi không
+		local isCrouching = (character and character:GetAttribute("Crouching") == true)
+		
+		if not humanoid or humanoid.Health <= 0 or (character and character:GetAttribute("Hiding") == true) or isCrouching then
+			if isSprinting then
+				stopSprinting()
+			end
+			if soundExhausted.IsPlaying then
+				soundExhausted:Stop()
+			end
+			return
+		end
+
 		local hrp = character:FindFirstChild("HumanoidRootPart")
 		local currentHorizontalSpeed = 0
 		if hrp then
@@ -214,7 +233,7 @@ if UserInputService.TouchEnabled then
 
 		-- Kiểm tra logic chạy
 		if isSprinting then
-			-- Nếu người chơi dừng di chuyển (MoveDirection == 0) hoặc bị kẹt vật cản (speed < 2) -> Tự ngắt chạy
+			-- Nếu người chơi dừng di chuyển hoặc bị kẹt vật cản -> Tự ngắt chạy
 			if (not humanoid or humanoid.MoveDirection.Magnitude == 0) or ((isGameLoaded or not CONFIG.usewhileloading) and currentHorizontalSpeed < 2) then
 				stopSprinting()
 			else
@@ -232,7 +251,7 @@ if UserInputService.TouchEnabled then
 				end
 			end
 		else
-			-- Khi không chạy: Đợi hết thời gian trễ (regendelay) thì hồi phục stamina
+			-- Khi không chạy: Hồi phục stamina sau khoảng thời gian trễ (regendelay)
 			if os.clock() - lastSprintTime >= CONFIG.regendelay then
 				stamina = math.clamp(stamina + (CONFIG.staminaregen * deltaTime), 0, CONFIG.maxstamina)
 				
