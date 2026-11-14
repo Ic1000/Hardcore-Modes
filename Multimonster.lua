@@ -17,6 +17,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local debounce = false
 local isJumpscaring = false
 local destroyedsounds = false
+local speed = getgenv().FasterTrouble and 400 or math.random(267, 350)
 
 -- Khai báo biến âm thanh cửa an toàn
 local doorSound1 = Instance.new("Sound")
@@ -368,7 +369,7 @@ local entity = spawner.Create({
 		Values = {18, 25, 0.05, 0.1}
 	},
 	Movement = {
-		Speed = math.random(267, 350),
+		Speed = speed,
 		Delay = math.random(1, 1.5),
 		Reversed = false
 	},
