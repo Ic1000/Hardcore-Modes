@@ -9,7 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local blaSound -- Biến blaSound theo yêu cầu của fen
-local speed = getgenv().FasterTrouble and 225 or 180
+local speed = getgenv().FasterTrouble and 250 or 200
 
 -- Hàm tải âm thanh từ GitHub (chuẩn hóa 1 hàm duy nhất)
 local function GetGitSound(GithubSnd, SoundName)
@@ -106,7 +106,7 @@ local entity = Spawner:Create({
 	},
 	Lights = {
 		Flicker = { Enabled = false, Duration = 1 },
-		Shatter = false,
+		Shatter = true,
 		Repair = false
 	},
 	Earthquake = { Enabled = false },
@@ -133,7 +133,7 @@ local entity = Spawner:Create({
 		Amount = 0.001
 	},
 	Crucifixion = {
-		Enabled = true,
+		Enabled = false,
 		Range = 50,
 		Resist = false,
 		Break = true
