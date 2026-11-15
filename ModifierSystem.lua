@@ -90,7 +90,7 @@ listScroll.Parent = mainFrame
 
 listScroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
 	local contentHeight = listScroll.AbsoluteCanvasSize.Y
-	local targetHeight = math.clamp(contentHeight + 70, 60, 80)
+	local targetHeight = math.clamp(contentHeight + 70, 60, 160)
 	mainFrame.Size = UDim2.new(0, 340, 0, targetHeight)
 end)
 
@@ -275,7 +275,31 @@ unaddBtn.MouseButton1Click:Connect(function()
 	end
 end)
 
+-- ========================================================
+--   TỰ ĐỘNG DESTROY GUI KHI SANG PHÒNG MỚI (LATEST ROOM CHANGED)
+-- ========================================================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local GameData = ReplicatedStorage:FindFirstChild("GameData")
 
+if GameData then
+	local latestRoom = GameData:FindFirstChild("LatestRoom")
+	if latestRoom then
+		-- Lưu lại phòng hiện tại lúc đầu
+		local lastRoomValue = latestRoom.Value
+		
+		-- Lắng nghe khi phòng thay đổi
+		latestRoom.Changed:Connect(function(newRoom)
+			if newRoom ~= lastRoomValue then
+				print("[Hardcore Modifiers] Đã sang phòng mới: " .. tostring(newRoom) .. " -> Tiến hành dọn dẹp GUI.")
+				
+				-- Hủy GUI ngay lập tức khi sang phòng mới
+				if screenGui then
+					screenGui:Destroy()
+				end
+			end
+		end)
+	end
+end
 
 -- ========================================================
 --   4. HÀM TẠO NÚT TRONG DANH SÁCH CHÍNH
