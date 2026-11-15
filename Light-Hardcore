@@ -39,7 +39,7 @@ local function processRoom(room)
                     local pivotPart = cloneModel:FindFirstChild("Pivot")
                     if pivotPart then pivotPart.Parent = child end 
                     
-                    local fixture = child:WaitForChild("Light_Fixture", 5)
+                    local fixture = child:WaitForChild("LightFixture", 5)
                     if not fixture then return end 
 
                     local neon = fixture:WaitForChild("Neon", 5)
@@ -104,8 +104,8 @@ local function processRoom(room)
                 local cloneModel = lightModel:Clone()
                 cloneModel:PivotTo(child:GetPivot())
 
-                local sourceFixture = cloneModel:WaitForChild("Light_Fixture", 5)
-                local targetFixture = child:WaitForChild("Light_Fixture", 5)
+                local sourceFixture = cloneModel:WaitForChild("LightFixture", 5)
+                local targetFixture = child:WaitForChild("LightFixture", 5)
 
                 if sourceFixture and targetFixture then 
                     local sourceNeon = sourceFixture:WaitForChild("Neon", 5)
