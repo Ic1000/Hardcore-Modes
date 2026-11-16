@@ -5,8 +5,10 @@ local Players = game:GetService("Players")
 local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Entity%20Spawner/V2/Source.lua"))()
 
 --- Modifier Support 
-local speed = getgenv().FasterTrouble and 50 or 25
-
+local speed
+if getgenv().FasterTrouble then 
+speed = 50 else speed = 25
+end
 ---====== Create entity ======---
 
 local entity = spawner.Create({
