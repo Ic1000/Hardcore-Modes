@@ -90,7 +90,7 @@ listScroll.Parent = mainFrame
 
 listScroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
 	local contentHeight = listScroll.AbsoluteCanvasSize.Y
-	local targetHeight = math.clamp(contentHeight + 70, 60, 160)
+	local targetHeight = math.clamp(contentHeight + 70, 60, 320)
 	mainFrame.Size = UDim2.new(0, 340, 0, targetHeight)
 end)
 
