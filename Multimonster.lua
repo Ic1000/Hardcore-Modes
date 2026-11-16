@@ -17,7 +17,11 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local debounce = false
 local isJumpscaring = false
 local destroyedsounds = false
-local speed = getgenv().FasterTrouble and 400 or math.random(267, 350)
+
+local speed
+if getgenv().FasterTrouble then 
+speed = 400 else speed = math.random(267, 350)
+end
 
 -- Khai báo biến âm thanh cửa an toàn
 local doorSound1 = Instance.new("Sound")
