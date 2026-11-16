@@ -79,7 +79,10 @@ local function LoadCustomInstance(assetId, parent)
     return model
 end
 
-local speed = getgenv().FasterTrouble and 1.4 or 1.8
+local speed
+if getgenv().FasterTrouble then 
+speed = 1.4 else speed = 1.8
+end
 
 -- ====== MOVEMENT & JUMPSCARE LOGIC ======
 local function MoveRebound()
