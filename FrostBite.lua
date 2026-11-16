@@ -1,5 +1,5 @@
 -- ========================================================
---          FROSTBITE ENTITY SCRIPT (FIXED SPAWN HEIGHT)
+--   FROSTBITE ENTITY SCRIPT (FULL CRUCIFIX & MELD ICE ROOM)
 -- ========================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +12,11 @@ local RunService = game:GetService("RunService")
 if _G.FrostbiteAchievementGotten == nil then
 	_G.FrostbiteAchievementGotten = false
 end
+
+-- TẢI HÀM TIỆN ÍCH CHUẨN VYNIXU (ĐẢM BẢO LoadCustomInstance HOẠT ĐỘNG HOÀN HẢO)
+pcall(function()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Functions.lua"))()
+end)
 
 local gameData = ReplicatedStorage:WaitForChild("GameData", 10)
 local latestRoom = gameData and gameData:WaitForChild("LatestRoom", 10)
@@ -60,15 +65,18 @@ if not s.PrimaryPart then
 	s.PrimaryPart = entity
 end
 
+-- Biến cờ kiểm soát trạng thái
+s:SetAttribute("FullySpawned", false)
+s:SetAttribute("BeingBanished", false)
+
 -- ========================================================
--- PHẦN SỬA LỖI: ĐỊNH VỊ VỊ TRÍ CHUẨN XÁC TRÊN MẶT SÀN
+-- ĐỊNH VỊ VỊ TRÍ CHUẨN XÁC TRÊN MẶT SÀN
 -- ========================================================
 
 local function SetEntityPositionOnFloor(targetRoom)
 	local floorPart = targetRoom:FindFirstChild("Parts") and targetRoom.Parts:FindFirstChild("Floor")
 	local baseCFrame = floorPart and floorPart.CFrame or targetRoom:GetPivot()
 
-	-- Chiếu raycast từ trên độ cao 15 studs xuống dưới để tìm mặt sàn chính xác
 	local rayOrigin = baseCFrame.Position + Vector3.new(0, 15, 0)
 	local rayDirection = Vector3.new(0, -50, 0)
 
@@ -80,10 +88,8 @@ local function SetEntityPositionOnFloor(targetRoom)
 
 	local targetPosition
 	if raycastResult then
-		-- Đặt chân thực thể cách mặt sàn 2.5 - 3.5 studs (vừa tầm lơ lửng đẹp)
 		targetPosition = raycastResult.Position + Vector3.new(0, -2, 0)
 	else
-		-- Dự phòng nếu raycast không trúng sàn
 		targetPosition = baseCFrame.Position + Vector3.new(0, -3, 0)
 	end
 
@@ -103,11 +109,11 @@ if entity:FindFirstChild("Part") then
 end
 
 -- ========================================================
--- HIỆU ỨNG PHÒNG XANH & HIỆU ỨNG ÂM THANH
+-- HIỆU ỨNG PHÒNG XANH & ÁNH SÁNG BAN ĐẦU
 -- ========================================================
 
 local lightTweenInfo = TweenInfo.new(3, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
-local blueLightColor = {Color = Color3.new(0, 0, 1)}
+local blueLightColor = {Color = Color3.fromRGB(100, 180, 255)}
 
 for _, descendant in ipairs(workspace.CurrentRooms:GetDescendants()) do
 	if descendant:IsA("Light") then
@@ -121,12 +127,12 @@ pcall(function()
 end)
 
 local pointLight = Instance.new("PointLight")
-pointLight.Color = Color3.fromRGB(0, 150, 255)
-pointLight.Range = 60
+pointLight.Color = Color3.fromRGB(100, 200, 255)
+pointLight.Range = 70
 pointLight.Brightness = 0
 pointLight.Parent = entity
 
-TweenService:Create(pointLight, TweenInfo.new(3), {Brightness = 3}):Play()
+TweenService:Create(pointLight, TweenInfo.new(3), {Brightness = 2.5}):Play()
 
 local sound = Instance.new("Sound")
 sound.SoundId = "rbxassetid://137044859218769"
@@ -139,14 +145,14 @@ local frost = Instance.new("ColorCorrectionEffect")
 frost.Name = "Frostbite_Effect"
 frost.Parent = Lighting
 TweenService:Create(frost, TweenInfo.new(10), {
-	TintColor = Color3.fromRGB(0, 0, 255),
-	Saturation = -0.5,
-	Contrast = 0.2
+	TintColor = Color3.fromRGB(180, 220, 255),
+	Saturation = -0.2,
+	Contrast = 0.1
 }):Play()
 
 local attachment = entity:FindFirstChild("Attachment") or s:FindFirstChild("Attachment", true)
 if attachment then
-	for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "BlackTrai3l"}) do
+	for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "smoker", "BlackTrai3l"}) do
 		local child = attachment:FindFirstChild(v)
 		if child then child.Enabled = false end
 	end
@@ -160,26 +166,54 @@ shakeConnection = RunService.Heartbeat:Connect(function()
 		local distance = (s.PrimaryPart.Position - chr.HumanoidRootPart.Position).Magnitude
 		if distance <= hitbox then
 			pcall(function()
-				local CameraShaker = require(ReplicatedStorage.CameraShaker)
-				local camera = workspace.CurrentCamera
-				local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
-					camera.CFrame = camera.CFrame * shakeCf
-				end)
-				camShake:Start()
-				camShake:ShakeOnce(9, 8, 0.1, 2, 1, 6)
+				local camShakerMod = ReplicatedStorage:FindFirstChild("CameraShaker", true)
+				if camShakerMod then
+					local CameraShaker = require(camShakerMod)
+					local camera = workspace.CurrentCamera
+					local camShake = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+						camera.CFrame = camera.CFrame * shakeCf
+					end)
+					camShake:Start()
+					camShake:ShakeOnce(9, 8, 0.1, 2, 1, 6)
+				end
 			end)
 		end
 	end
 end)
 
+-- THỜI GIAN ĐỢI XUẤT HIỆN HOÀN TOÀN (8 GIÂY)
 task.wait(8)
 
+s:SetAttribute("FullySpawned", true)
+
 if attachment then
-	for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "BlackTrai3l"}) do
+	for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "smoker", "BlackTrai3l"}) do
 		local child = attachment:FindFirstChild(v)
 		if child then child.Enabled = true end
 	end
 end
+
+-- ========================================================
+-- HIỆU ỨNG CHUYỂN ĐỔI PHÒNG THÀNH "MELD ICE" TỪ TỪ
+-- ========================================================
+task.spawn(function()
+	pcall(function()
+		local roomToMeld = GetRoom()
+		if roomToMeld then
+			local meldTweenInfo = TweenInfo.new(4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			for _, part in ipairs(roomToMeld:GetDescendants()) do
+				if part:IsA("BasePart") and not part.Anchored then continue end
+				if part:IsA("BasePart") then
+					-- Tween từ từ màu sắc các vật thể trong phòng sang tone băng giá (Xanh dương lạnh)
+					TweenService:Create(part, meldTweenInfo, {
+						Color = part.Color:Lerp(Color3.fromRGB(150, 210, 255), 0.35),
+						Material = Enum.Material.Glass -- Tạo hiệu ứng bề mặt bóng lạnh như băng
+					}):Play()
+				end
+			end
+		end
+	end)
+end)
 
 pcall(function()
 	local frostbiteModel = s:FindFirstChild("Frostbite") or s
@@ -218,7 +252,7 @@ activeSound.Parent = entity
 activeSound:Play()
 
 local function IsLighterActive(character)
-	if not character then return false end
+	if not character then return end
 	for _, child in ipairs(character:GetChildren()) do
 		if child:IsA("Tool") then
 			local name = child.Name:lower()
@@ -237,7 +271,194 @@ local function IsLighterActive(character)
 	return false
 end
 
-local active = true
+-- ========================================================
+-- TẢI ASSET HIỆU ỨNG TRỪ TÀ (REPENTANCE) CHUẨN VYNIXU ĐỂ KHÔNG BỊ LỖI
+-- ========================================================
+
+local repentanceAsset = nil
+pcall(function()
+	if type(LoadCustomInstance) == "function" then
+		repentanceAsset = LoadCustomInstance("https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main/Assets/Repentance.rbxm")
+	else
+		repentanceAsset = game:GetObjects("rbxassetid://12543866876")[1]
+	end
+end)
+
+local active = true -- Biến quản lý gây sát thương
+
+local function TriggerCrucifixBanish(tool)
+	if s:GetAttribute("BeingBanished") then return end
+	s:SetAttribute("BeingBanished", true)
+
+	-- NGAY LẬP TỨC NGỪNG GÂY DAMAGE
+	active = false
+
+	-- Tắt toàn bộ âm thanh hoạt động / ambient của thực thể
+	pcall(function()
+		if entity:FindFirstChild("Ambience") then entity.Ambience:Stop() end
+		if entity:FindFirstChild("AmbienceFar") then entity.AmbienceFar:Stop() end
+		if entity:FindFirstChild("Frostbite_ActiveSound") then entity.Frostbite_ActiveSound:Stop() end
+		for _, child in ipairs(entity:GetDescendants()) do
+			if child:IsA("Sound") then
+				child:Stop()
+			end
+		end
+	end)
+
+	-- PHÁT ÂM THANH DESPAWN KHI ĂN THÁNH GIÁ
+	pcall(function()
+		local des = Instance.new("Sound")
+		des.SoundId = "rbxassetid://111715441853991"
+		des.Looped = false
+		des.Volume = 1.5
+		des.Parent = workspace
+		des:Play()
+		Debris:AddItem(des, 6)
+	end)
+
+	if tool then tool:Destroy() end
+
+	local character = plr.Character
+	local entityPivot = s:GetPivot()
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = {character, s}
+
+	local result = workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params)
+	if not result then
+		s:Destroy()
+		return
+	end
+
+	local successRitual = false
+
+	if repentanceAsset and repentanceAsset:IsA("Model") then
+		local repentance = repentanceAsset:Clone()
+		local crucifix = repentance:FindFirstChild("Crucifix")
+		local handle = crucifix and crucifix:FindFirstChild("Handle")
+		local pentagram = repentance:FindFirstChild("Pentagram")
+		local entityPart = repentance:FindFirstChild("Entity")
+
+		if crucifix and pentagram and entityPart then
+			successRitual = true
+			local sound = handle and (handle:FindFirstChild("Sound") or handle:FindFirstChild("SoundFail"))
+
+			repentance:PivotTo(CFrame.new(result.Position))
+			crucifix:PivotTo(character:GetPivot())
+			entityPart.CFrame = entityPivot
+			repentance.Parent = workspace
+
+			if sound then sound:Play() end
+
+			-- Khóa chặt mô hình Frostbite bám theo tâm hoạt ảnh trừ tà
+			task.spawn(function()
+				while entityPart.Parent and s.Parent do
+					s:PivotTo(entityPart.CFrame)
+					RunService.RenderStepped:Wait()
+				end
+				if s and s.Parent then
+					s:Destroy()
+				end
+			end)
+
+			-- Vòng phép thụt xuống đất
+			if pentagram:FindFirstChild("Circle") then
+				TweenService:Create(
+					pentagram.Circle,
+					TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
+					{ CFrame = pentagram.Circle.CFrame - Vector3.new(0, 25, 0) }
+				):Play()
+				task.delay(2, function() pentagram.Circle:Destroy() end)
+			end
+
+			-- Kéo thực thể bay lên không trung
+			TweenService:Create(
+				entityPart,
+				TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In),
+				{ CFrame = entityPart.CFrame + Vector3.new(0, 2, 0) }
+			):Play()
+
+			-- Sau 3 giây kéo sập xuống lòng đất
+			task.delay(3, function()
+				if entityPart then
+					TweenService:Create(
+						entityPart,
+						TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+						{ CFrame = entityPart.CFrame - Vector3.new(0, 50, 0) }
+					):Play()
+				end
+			end)
+
+			-- Tan biến từ từ (Fade out) hiệu ứng repentance
+			task.delay(7, function()
+				if repentance and repentance.Parent then
+					for _, part in pairs(repentance:GetDescendants()) do
+						if part:IsA("BasePart") or part:IsA("Decal") then
+							TweenService:Create(part, TweenInfo.new(2, Enum.EasingStyle.Linear), {Transparency = 1}):Play()
+						elseif part:IsA("Beam") or part:IsA("ParticleEmitter") then
+							part.Enabled = false
+						end
+					end
+
+					task.wait(2)
+					repentance:Destroy()
+				end
+
+				if s and s.Parent then 
+					s:Destroy() 
+				end
+			end)
+		end
+	end
+
+	-- DỰ PHÒNG AN TOÀN NẾU ASSET TẢI LỖI
+	if not successRitual then
+		task.spawn(function()
+			local startCF = entityPivot
+			local t = 0
+			while t < 3 and s and s.Parent do
+				t = t + RunService.RenderStepped:Wait()
+				s:PivotTo(startCF * CFrame.new(0, t * 1.5, 0) * CFrame.Angles(0, math.rad(t * 300), 0))
+			end
+			if s and s.Parent then
+				s:Destroy()
+			end
+		end)
+	end
+end
+
+local function CheckCrucifix()
+	if not s:GetAttribute("FullySpawned") or s:GetAttribute("BeingBanished") then return end
+
+	local char = plr.Character
+	if not char then return end
+
+	local tool = char:FindFirstChildOfClass("Tool")
+	if tool then
+		local name = tool.Name:lower()
+		if name:find("crucifix") or name:find("cruxy") then
+			local rootPart = char:FindFirstChild("HumanoidRootPart")
+			local primaryPart = s.PrimaryPart or entity
+			if rootPart and primaryPart then
+				local dist = (primaryPart.Position - rootPart.Position).Magnitude
+				if dist <= 45 then
+					TriggerCrucifixBanish(tool)
+				end
+			end
+		end
+	end
+end
+
+task.spawn(function()
+	while s and s.Parent do
+		CheckCrucifix()
+		task.wait(0.2)
+	end
+end)
+
+-- ========================================================
+
 local diedConn
 
 local function setupCharacter(char)
@@ -259,12 +480,13 @@ plr.CharacterAdded:Connect(setupCharacter)
 task.spawn(function()
 	while active do
 		task.wait(1)
+		if not active then break end
 		local chr = plr.Character
 		if chr then
 			local hum = chr:FindFirstChildOfClass("Humanoid")
 			if hum and hum.Health > 0 then
 				local isProtected = IsLighterActive(chr)
-				if not isProtected then
+				if not isProtected and active then
 					hum:TakeDamage(5)
 					pcall(function()
 						local stats = ReplicatedStorage:FindFirstChild("GameStats")
@@ -315,7 +537,7 @@ local function Cleanup()
 
 	pcall(function()
 		if attachment then
-			for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "BlackTrai3l"}) do
+			for _, v in ipairs({"face", "Heylois", "BlackTrai2l", "smoker", "BlackTrai3l"}) do
 				local child = attachment:FindFirstChild(v)
 				if child then child.Enabled = false end
 			end
@@ -338,7 +560,7 @@ local function Cleanup()
 	end)
 
 	pcall(function()
-		if entity and entity.Parent then
+		if entity and entity.Parent and not s:GetAttribute("BeingBanished") then
 			if entity:FindFirstChild("Ambience") then entity.Ambience:Stop() end
 			if entity:FindFirstChild("AmbienceFar") then entity.AmbienceFar:Stop() end
 			if entity:FindFirstChild("Frostbite_ActiveSound") then entity.Frostbite_ActiveSound:Stop() end
