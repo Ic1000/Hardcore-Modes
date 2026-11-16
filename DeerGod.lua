@@ -31,8 +31,10 @@ local isDeactivated = false -- Biến cờ ngắt toàn bộ hệ thống
 local currentTween = nil
 local nodeConnection = nil
 
-local speed = getgenv().FasterTrouble and 3.5 or 4
-
+local speed
+if getgenv().FasterTrouble then 
+speed = 3.5 else speed = 4 
+end
 -- Tải Module CustomAchievements
 local CustomAchievements = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
 
