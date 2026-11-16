@@ -9,7 +9,12 @@ if not success or not Spawner then
 	return
 end
 
-local speed = getgenv().FasterTrouble and 100 or 50
+local speed
+if getgenv().FasterTrouble then
+speed = 100
+else
+speed = 50
+end
 
 local entity = Spawner:Create({
 	Entity = {
