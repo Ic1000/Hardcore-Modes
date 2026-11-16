@@ -16,7 +16,11 @@ local camera = workspace.CurrentCamera
 local playerGui = player:WaitForChild("PlayerGui")
 
 --// SETTINGS
-local delay = getgenv().FasterTrouble and 1 or 2
+local delay
+if getgenv().FasterTrouble then 
+delay = 1 else delay = 2
+end
+
 local DAMAGE = 30
 local ATTACK_DELAY = delay
 local LOOK_THRESHOLD = 0.65
