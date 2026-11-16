@@ -18,7 +18,9 @@ local playerGui = player:WaitForChild("PlayerGui")
 --// SETTINGS
 local delay
 if getgenv().FasterTrouble then 
-delay = 1 else delay = 2
+	delay = 1 
+else 
+	delay = 2
 end
 
 local DAMAGE = 30
@@ -212,7 +214,7 @@ local function CrucifixEntity(targetEntity, primaryPart, holdingItem)
 				end
 			end)
 
-						-- Dọn dẹp asset từ từ bằng hiệu ứng mờ dần (Fade out)
+			-- Dọn dẹp asset từ từ bằng hiệu ứng mờ dần (Fade out)
 			task.delay(9, function()
 				if repentance and repentance.Parent then
 					for _, part in pairs(repentance:GetDescendants()) do
@@ -231,6 +233,8 @@ local function CrucifixEntity(targetEntity, primaryPart, holdingItem)
 					targetEntity:Destroy() 
 				end
 			end)
+		end
+	end
 
 	-- DỰ PHÒNG AN TOÀN NẾU ASSET KHÔNG TẢI ĐƯỢC
 	if not successRitual then
