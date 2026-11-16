@@ -7,7 +7,9 @@ local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/Regul
 --- Modifier Support 
 local speed
 if getgenv().FasterTrouble then 
-speed = 50 else speed = 25
+    speed = 50 
+else 
+    speed = 25
 end
 ---====== Create entity ======---
 
