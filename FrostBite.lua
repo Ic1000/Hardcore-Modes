@@ -11,7 +11,7 @@ local RunService = game:GetService("RunService")
 
 local speed
 if getgenv().FasterTrouble then 
-speed = 4 else speed = 8
+speed = 6 else speed = 8
 end
 
 if _G.FrostbiteAchievementGotten == nil then
