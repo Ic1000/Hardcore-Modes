@@ -8,8 +8,12 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
-local blaSound -- Biến blaSound theo yêu cầu của fen
-local speed = getgenv().FasterTrouble and 250 or 200
+local blaSound
+-- Biến blaSound theo yêu cầu của fen
+local speed
+if getgenv().FasterTrouble then 
+speed = 250 else speed = 200
+end
 
 -- Hàm tải âm thanh từ GitHub (chuẩn hóa 1 hàm duy nhất)
 local function GetGitSound(GithubSnd, SoundName)
