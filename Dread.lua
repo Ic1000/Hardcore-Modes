@@ -1,3 +1,8 @@
+local delay
+if getgenv().FasterTrouble then 
+delay = 1 else delay = 2
+end
+
 local function spawnDreadFull()
     -- Lắng nghe và đợi người chơi sang phòng mới (LatestRoom thay đổi) thì mới bắt đầu triệu hồi Dread
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -119,10 +124,10 @@ local function spawnDreadFull()
     -- 5. Vòng lặp theo dõi: Tích lũy không bị trừ + Đếm số lần nhìn lướt (>= 2 lần là bị tóm)
     task.spawn(function()
         local accumulatedLookTime = 0
-        local requiredLookTime = 2.0 -- Tích lũy đủ 2s là bị bắt
+        local requiredLookTime = delay -- Tích lũy đủ 2s là bị bắt
         
         local lookCount = 0
-        local maxLookCount = 2      -- Nhìn lướt qua quá 2 lần là bị bắt
+        local maxLookCount = delay    -- Nhìn lướt qua quá 2 lần là bị bắt
         local wasLooking = false    -- Biến cờ theo dõi trạng thái nhìn để đếm chính xác từng lần lướt
         
         while modelAsset.Parent and dreadRootPart and dreadRootPart.Parent do
