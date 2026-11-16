@@ -9,6 +9,11 @@ local Lighting = game:GetService("Lighting")
 local Debris = game:GetService("Debris")
 local RunService = game:GetService("RunService")
 
+local speed
+if getgenv().FasterTrouble then 
+speed = 4 else speed = 8
+end
+
 if _G.FrostbiteAchievementGotten == nil then
 	_G.FrostbiteAchievementGotten = false
 end
@@ -182,7 +187,7 @@ shakeConnection = RunService.Heartbeat:Connect(function()
 end)
 
 -- THỜI GIAN ĐỢI XUẤT HIỆN HOÀN TOÀN (8 GIÂY)
-task.wait(8)
+task.wait(speed)
 
 s:SetAttribute("FullySpawned", true)
 
@@ -310,7 +315,7 @@ local function TriggerCrucifixBanish(tool)
 		local des = Instance.new("Sound")
 		des.SoundId = "rbxassetid://111715441853991"
 		des.Looped = false
-		des.Volume = 1.5
+		des.Volume = 0.8
 		des.Parent = workspace
 		des:Play()
 		Debris:AddItem(des, 6)
@@ -568,7 +573,7 @@ local function Cleanup()
 			local des = Instance.new("Sound")
 			des.SoundId = "rbxassetid://111715441853991"
 			des.Looped = false
-			des.Volume = 1.5
+			des.Volume = 0.8
 			des.Parent = workspace
 			des:Play()
 
