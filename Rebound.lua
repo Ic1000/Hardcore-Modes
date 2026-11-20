@@ -142,9 +142,9 @@ local function HasCrucifixEquipped()
 		if item:IsA("Tool") then
 			local tagged = false
 			pcall(function()
-				tagged = item:HasTag("Crucifix")
+				tagged = item:HasTag("Crucifix") or item:HasTag("Cruxy")
 			end)
-			if tagged or item.Name:lower():find("crucifix", 1, true) then
+			if tagged or item.Name:lower():find("crucifix", 1, true) or item.Name:lower():find("cruxy", 1, true) then
 				return true, item
 			end
 		end
