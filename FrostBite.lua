@@ -18,6 +18,8 @@ if _G.FrostbiteAchievementGotten == nil then
 	_G.FrostbiteAchievementGotten = false
 end
 
+local CRUCIFIX_COLOR = Color3.fromRGB(137, 207, 255) -- Đổi sang Color3.fromRGB(255, 227, 137) nếu thích vàng Curious
+
 -- TẢI HÀM TIỆN ÍCH CHUẨN VYNIXU (ĐẢM BẢO LoadCustomInstance HOẠT ĐỘNG HOÀN HẢO)
 pcall(function()
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Functions.lua"))()
@@ -283,20 +285,44 @@ end
 local repentanceAsset = nil
 pcall(function()
 	if type(LoadCustomInstance) == "function" then
-		repentanceAsset = LoadCustomInstance("https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main/Assets/Repentance.rbxm")
+		repentanceAsset = LoadCustomInstance("https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main/Assets/Repentance.rbxm") --
 	else
 		repentanceAsset = game:GetObjects("rbxassetid://12543866876")[1]
 	end
 end)
 
+local function GetGiveMeColorList(rootObj)
+	local list = {}
+	local ok = pcall(function()
+		list = rootObj:QueryDescendants(".GiveMeColor") --
+	end)
+	if ok and #list > 0 then
+		return list
+	end
+	for _, d in ipairs(rootObj:GetDescendants()) do
+		local tagged = false
+		pcall(function()
+			tagged = d:HasTag("GiveMeColor")
+		end)
+		if tagged or d.Name == "GiveMeColor" then
+			table.insert(list, d)
+		end
+	end
+	return list
+end
+
 local active = true -- Biến quản lý gây sát thương
 
 local function TriggerCrucifixBanish(tool)
-	if s:GetAttribute("BeingBanished") then return end
-	s:SetAttribute("BeingBanished", true)
+	if s:GetAttribute("BeingBanished") then return end --
+	s:SetAttribute("BeingBanished", true) --
 
-	-- NGAY LẬP TỨC NGỪNG GÂY DAMAGE
+	-- NGAY LẬP TỨC NGỪNG GÂY DAMAGE VÀ RUNG
 	active = false
+	if shakeConnection then
+		shakeConnection:Disconnect()
+		shakeConnection = nil
+	end
 
 	-- Tắt toàn bộ âm thanh hoạt động / ambient của thực thể
 	pcall(function()
@@ -321,99 +347,362 @@ local function TriggerCrucifixBanish(tool)
 		Debris:AddItem(des, 6)
 	end)
 
-	if tool then tool:Destroy() end
+	if tool then
+		pcall(function() tool:Destroy() end)
+	end
 
 	local character = plr.Character
-	local entityPivot = s:GetPivot()
+	local entityPivot = s:GetPivot() --
 
 	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = {character, s}
+	params.FilterType = Enum.RaycastFilterType.Exclude --
+	params.FilterDescendantsInstances = {character, s} --
 
-	local result = workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params)
+	local result = workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params) --
 	if not result then
-		s:Destroy()
-		return
+		result = { Position = entityPivot.Position - Vector3.new(0, 4, 0) }
+	end
+
+	local camShaker
+	local theShake
+	pcall(function()
+		local mainGameMod = plr.PlayerGui:FindFirstChild("MainUI")
+			and plr.PlayerGui.MainUI:FindFirstChild("Initiator")
+			and plr.PlayerGui.MainUI.Initiator:FindFirstChild("Main_Game")
+		if mainGameMod then
+			local mainGame = require(mainGameMod)
+			camShaker = mainGame and mainGame.camShaker --
+			if camShaker then
+				theShake = camShaker:StartShake(5, 20, 2, Vector3.zero) --
+			end
+		end
+	end)
+
+	if not camShaker then
+		pcall(function()
+			local shakerModule = ReplicatedStorage:FindFirstChild("CameraShaker", true)
+			if shakerModule then
+				local CameraShaker = require(shakerModule)
+				camShaker = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+					local curCam = workspace.CurrentCamera
+					if curCam then
+						curCam.CFrame = curCam.CFrame * shakeCf
+					end
+				end)
+				camShaker:Start()
+				theShake = camShaker:StartShake(5, 20, 2, Vector3.zero) --
+			end
+		end)
 	end
 
 	local successRitual = false
 
 	if repentanceAsset and repentanceAsset:IsA("Model") then
-		local repentance = repentanceAsset:Clone()
-		local crucifix = repentance:FindFirstChild("Crucifix")
-		local handle = crucifix and crucifix:FindFirstChild("Handle")
-		local pentagram = repentance:FindFirstChild("Pentagram")
-		local entityPart = repentance:FindFirstChild("Entity")
+		local repentance = repentanceAsset:Clone() --
+		local crucifix = repentance:FindFirstChild("Crucifix") --
+		local handle = crucifix and crucifix:FindFirstChild("Handle") --
+		local pentagram = repentance:FindFirstChild("Pentagram") --
+		local entityPart = repentance:FindFirstChild("Entity") --
+		local sound = handle and handle:FindFirstChild("Sound") --
 
 		if crucifix and pentagram and entityPart then
 			successRitual = true
-			local sound = handle and (handle:FindFirstChild("Sound") or handle:FindFirstChild("SoundFail"))
+			local charPivot = (character and character:GetPivot()) or workspace.CurrentCamera.CFrame
 
-			repentance:PivotTo(CFrame.new(result.Position))
-			crucifix:PivotTo(character:GetPivot())
-			entityPart.CFrame = entityPivot
-			repentance.Parent = workspace
+			pcall(function()
+				repentance:PivotTo(CFrame.new(result.Position)) --
+				crucifix:PivotTo(charPivot) --
+				if entityPart:IsA("BasePart") then
+					entityPart.Anchored = true
+					entityPart.CanCollide = false
+					entityPart.CFrame = entityPivot --
+				end
+			end)
 
-			if sound then sound:Play() end
+			repentance.Parent = workspace --
+			if sound and sound:IsA("Sound") then
+				pcall(function() sound:Play() end) --
+			end
 
-			-- Khóa chặt mô hình Frostbite bám theo tâm hoạt ảnh trừ tà
+			local startClock = os.clock()
+			local function waitUntil(t: number)
+				while repentance.Parent do
+					local elapsed = os.clock() - startClock
+					if sound and sound:IsA("Sound") and sound.TimeLength > 0 and sound.IsPlaying then
+						if sound.TimePosition >= t or elapsed >= (t + 2) then
+							break
+						end
+					elseif elapsed >= t then
+						break
+					end
+					RunService.RenderStepped:Wait() --
+				end
+			end
+
+			local function fadeOut()
+				for _, v in ipairs(pentagram:GetChildren()) do --
+					if v.Name == "BeamFlat" then --
+						task.delay(v:GetAttribute("Delay") or 0, function() --
+							if v and v.Parent then
+								pcall(function()
+									TweenService:Create(
+										v,
+										TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In), --
+										{ Brightness = 0 } --
+									):Play()
+								end)
+							end
+						end)
+					elseif v.Name == "BeamChain" then --
+						pcall(function()
+							TweenService:Create(
+								v,
+								TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In), --
+								{ Brightness = 0 } --
+							):Play()
+						end)
+					end
+				end
+			end
+
+			-- Đổi màu theo .GiveMeColor
+			for _, v in ipairs(GetGiveMeColorList(repentance)) do
+				pcall(function()
+					if v:IsA("Light") or v:IsA("BasePart") then --
+						v.Color = CRUCIFIX_COLOR --
+					elseif v:IsA("ParticleEmitter") or v:IsA("Beam") then --
+						v.Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, CRUCIFIX_COLOR), --
+							ColorSequenceKeypoint.new(1, CRUCIFIX_COLOR), --
+						})
+					end
+				end)
+			end
+
+			-- Khóa chặt mô hình Frostbite bám theo EntityPart
 			task.spawn(function()
-				while entityPart.Parent and s.Parent do
-					s:PivotTo(entityPart.CFrame)
-					RunService.RenderStepped:Wait()
+				while entityPart.Parent and repentance.Parent and s and s.Parent do
+					pcall(function()
+						s:PivotTo(entityPart.CFrame) --
+					end)
+					RunService.RenderStepped:Wait() --
 				end
 				if s and s.Parent then
-					s:Destroy()
+					s:Destroy() --
 				end
 			end)
 
 			-- Vòng phép thụt xuống đất
-			if pentagram:FindFirstChild("Circle") then
-				TweenService:Create(
-					pentagram.Circle,
-					TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
-					{ CFrame = pentagram.Circle.CFrame - Vector3.new(0, 25, 0) }
-				):Play()
-				task.delay(2, function() pentagram.Circle:Destroy() end)
+			local circle = pentagram:FindFirstChild("Circle")
+			if circle then
+				pcall(function()
+					TweenService:Create(
+						circle,
+						TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), --
+						{ CFrame = circle.CFrame - Vector3.new(0, 25, 0) } --
+					):Play()
+				end)
+				task.delay(2, function()
+					if circle and circle.Parent then
+						circle:Destroy() --
+					end
+				end)
 			end
 
-			-- Kéo thực thể bay lên không trung
-			TweenService:Create(
-				entityPart,
-				TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In),
-				{ CFrame = entityPart.CFrame + Vector3.new(0, 2, 0) }
-			):Play()
+			-- Thánh giá lơ lửng, xoay và tách mảnh Shards
+			if handle then
+				pcall(function()
+					local bp = handle:FindFirstChild("BodyPosition")
+					if bp then
+						bp.Position = (charPivot * CFrame.new(1, 4, -6)).Position --
+					end
+					local bav = handle:FindFirstChild("BodyAngularVelocity")
+					if bav then
+						TweenService:Create(
+							bav,
+							TweenInfo.new(4, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), --
+							{ AngularVelocity = Vector3.new(0, 40, 0) } --
+						):Play()
+					end
+				end)
 
-			-- Sau 3 giây kéo sập xuống lòng đất
-			task.delay(3, function()
-				if entityPart then
-					TweenService:Create(
-						entityPart,
-						TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-						{ CFrame = entityPart.CFrame - Vector3.new(0, 50, 0) }
-					):Play()
-				end
-			end)
-
-			-- Tan biến từ từ (Fade out) hiệu ứng repentance
-			task.delay(7, function()
-				if repentance and repentance.Parent then
-					for _, part in pairs(repentance:GetDescendants()) do
-						if part:IsA("BasePart") or part:IsA("Decal") then
-							TweenService:Create(part, TweenInfo.new(2, Enum.EasingStyle.Linear), {Transparency = 1}):Play()
-						elseif part:IsA("Beam") or part:IsA("ParticleEmitter") then
-							part.Enabled = false
+				task.delay(3, function()
+					local shards = handle:FindFirstChild("Shards")
+					if shards then
+						for _, shard in ipairs(shards:GetChildren()) do --
+							if shard:IsA("BasePart") then
+								pcall(function()
+									shard.CollisionGroup = "NoPlayer" --
+									shard.CanCollide = true --
+									local weld = shard:FindFirstChild("Weld")
+									if weld then weld:Destroy() end --
+									shard.AssemblyAngularVelocity = Vector3.zero --
+								end)
+							end
 						end
 					end
+				end)
+			end
 
-					task.wait(2)
-					repentance:Destroy()
+			-- Nâng thực thể lên
+			if entityPart:IsA("BasePart") then
+				pcall(function()
+					TweenService:Create(
+						entityPart,
+						TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In), --
+						{ CFrame = entityPart.CFrame + Vector3.new(0, 2, 0) } --
+					):Play()
+				end)
+			end
+
+			-- Nhịp ánh sáng nghi thức
+			local pentBright = pentagram:FindFirstChild("Base")
+				and pentagram.Base:FindFirstChild("LightAttach")
+				and pentagram.Base.LightAttach:FindFirstChild("LightBright")
+			local handleLight = handle and handle:FindFirstChild("Light")
+
+			task.spawn(function()
+				waitUntil(2.625) --
+				if not repentance.Parent then return end
+
+				if pentBright then
+					pcall(function()
+						TweenService:Create(
+							pentBright,
+							TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --
+							{ Brightness = 5, Range = 40 } --
+						):Play()
+					end)
+				end
+				if handleLight then
+					pcall(function()
+						TweenService:Create(
+							handleLight,
+							TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --
+							{ Brightness = 11.25, Range = 30 } --
+						):Play()
+					end)
 				end
 
-				if s and s.Parent then 
-					s:Destroy() 
+				task.wait(1.5) --
+				if not repentance.Parent then return end
+
+				if pentBright then
+					pcall(function()
+						TweenService:Create(
+							pentBright,
+							TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --
+							{ Brightness = 0, Range = 0 } --
+						):Play()
+					end)
+				end
+				if handleLight then
+					pcall(function()
+						TweenService:Create(
+							handleLight,
+							TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --
+							{ Brightness = 0, Range = 0 } --
+						):Play()
+					end)
+				end
+
+				if handleLight then
+					pcall(function()
+						TweenService:Create(
+							handleLight,
+							TweenInfo.new(1, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --
+							{ Brightness = 15, Range = 40 } --
+						):Play()
+					end)
+				end
+
+				if theShake then
+					pcall(function() theShake:StartFadeOut(3) end) --
+				end
+				fadeOut() --
+
+				local bav = handle and handle:FindFirstChild("BodyAngularVelocity")
+				if bav then
+					pcall(function()
+						TweenService:Create(
+							bav,
+							TweenInfo.new(3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), --
+							{ AngularVelocity = Vector3.zero } --
+						):Play()
+					end)
 				end
 			end)
+
+			-- Kéo thực thể xuống & tắt dần âm thanh
+			waitUntil(2.5) --
+			if entityPart:IsA("BasePart") and repentance.Parent then
+				pcall(function()
+					TweenService:Create(
+						entityPart,
+						TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In), --
+						{ CFrame = entityPart.CFrame - Vector3.new(0, 50, 0) } --
+					):Play()
+				end)
+			end
+
+			if s and s.Parent then
+				for _, snd in ipairs(s:GetDescendants()) do --
+					if snd:IsA("Sound") and not snd:GetAttribute("VolumeIgnore") then --
+						pcall(function()
+							TweenService:Create(
+								snd,
+								TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In), --
+								{ Volume = 0 } --
+							):Play()
+						end)
+					end
+				end
+			end
+
+			waitUntil(6.75) --
+
+			-- Bùng sáng & nổ hạt kết thúc
+			local glow = handle and handle:FindFirstChild("Glow")
+			if glow and glow:IsA("BasePart") then
+				pcall(function()
+					TweenService:Create(
+						glow,
+						TweenInfo.new(1), --
+						{ Size = glow.Size * 3, Transparency = 1 } --
+					):Play()
+				end)
+			end
+			if pentBright then
+				pcall(function()
+					TweenService:Create(
+						pentBright,
+						TweenInfo.new(1), --
+						{ Brightness = 0, Range = 0 } --
+					):Play()
+				end)
+			end
+			if handleLight then
+				pcall(function()
+					TweenService:Create(
+						handleLight,
+						TweenInfo.new(1), --
+						{ Brightness = 0, Range = 0 } --
+					):Play()
+				end)
+			end
+
+			local explodeParticle = handle and handle:FindFirstChild("ExplodeParticle")
+			if explodeParticle and explodeParticle:IsA("ParticleEmitter") then
+				pcall(function() explodeParticle:Emit(math.random(20, 30)) end) --
+			end
+			if camShaker then
+				pcall(function() camShaker:ShakeOnce(7.5, 7.5, 0.25, 1.5) end) --
+			end
+
+			if s and s.Parent then
+				s:Destroy() --
+			end
+			Debris:AddItem(repentance, 5) --
 		end
 	end
 
