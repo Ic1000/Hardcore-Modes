@@ -1,5 +1,5 @@
 -- ========================================================
---     MULTIMONSTER SCRIPT (CHUYỂN SANG OGHUNGERNEWSPAWNER)
+--     MULTIMONSTER SCRIPT (LET PLAYING SOUNDS FINISH)
 -- ========================================================
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -11,19 +11,29 @@ local Workspace = game:GetService("Workspace")
 local SoundService = game:GetService("SoundService")
 local ContentProvider = game:GetService("ContentProvider")
 
+if not LoadCustomInstance then
+	pcall(function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Functions.lua"))()
+	end)
+end
+
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 
 local debounce = false
 local isJumpscaring = false
+local isCrucifixed = false
 local destroyedsounds = false
+local activeBreakingSound = nil
+local activeSpawnedModel = nil
 
-local speed 
+local speed
 if getgenv().FasterTrouble then
-speed = 400
-else 
-speed = math.random(267, 350) end
+	speed = 400
+else
+	speed = math.random(267, 350)
+end
 
 -- Khai báo biến âm thanh cửa an toàn
 local doorSound1 = Instance.new("Sound")
@@ -75,6 +85,82 @@ local function GetGitSound(GithubSnd, SoundName)
 
 	sound.SoundId = GithubSnd
 	return sound
+end
+
+local function AttachFinishCleanup(soundObj: Sound)
+	if not soundObj then return end
+	if soundObj.IsPlaying then
+		soundObj.Ended:Once(function()
+			if soundObj and soundObj.Parent then
+				pcall(function()
+					soundObj:Destroy()
+				end)
+			end
+		end)
+	else
+		pcall(function()
+			soundObj:Destroy()
+		end)
+	end
+end
+
+local function LetPlayingSoundsFinish(targetModel)
+	if activeBreakingSound and activeBreakingSound.Parent then
+		pcall(function()
+			activeBreakingSound.Looped = false
+		end)
+		AttachFinishCleanup(activeBreakingSound)
+		activeBreakingSound = nil
+	end
+
+	for _, s in ipairs({ doorSound1, doorSound2 }) do
+		if s and s.Parent then
+			pcall(function()
+				s.Looped = false
+			end)
+			if not s.IsPlaying then
+				pcall(function()
+					s.TimePosition = 0
+				end)
+			end
+		end
+	end
+
+	if targetModel then
+		for _, desc in ipairs(targetModel:GetDescendants()) do
+			if desc:IsA("Sound") and not desc:GetAttribute("VolumeIgnore") then
+				pcall(function()
+					desc.Looped = false
+					if desc.IsPlaying then
+						desc.Ended:Once(function()
+							if desc and desc.Parent then
+								desc:Destroy()
+							end
+						end)
+					else
+						desc:Destroy()
+					end
+				end)
+			end
+		end
+	end
+
+	for _, obj in ipairs(Workspace:GetDescendants()) do
+		if obj:IsA("Sound") and obj.Parent and obj.Parent:IsDescendantOf(CurrentRooms) then
+			pcall(function()
+				obj.Looped = false
+				if obj.IsPlaying then
+					obj.Ended:Once(function()
+						if obj and obj.Parent then
+							obj:Destroy()
+						end
+					end)
+				else
+					obj:Destroy()
+				end
+			end)
+		end
+	end
 end
 
 -- ========================================================
@@ -134,31 +220,30 @@ local function hasTargetParent(model, room)
 end
 
 local function shakeCollision(collision)
-	if not collision or collision.Anchored then return end
+	if isCrucifixed or not collision or collision.Anchored then return end
 	local mass = collision.AssemblyMass
 	local force = mass * 5
 	for _ = 1, 8 do
-		if collision.Parent and not collision.Anchored then
-			local look = Vector3.new(entityMoveDirection.X, 0, entityMoveDirection.Z)
-			if look.Magnitude > 0 then
-				look = look.Unit
-				local angle = math.rad(math.random(-60, 60))
-				local direction = CFrame.fromAxisAngle(Vector3.yAxis, angle):VectorToWorldSpace(look)
-				direction = Vector3.new(direction.X, 0, direction.Z).Unit
-				collision:ApplyImpulse(direction * force)
-				collision:ApplyAngularImpulse(Vector3.new(
-					math.random(-1, 1),
-					math.random(-1, 1),
-					math.random(-1, 1)
-				) * mass * 15)
-			end
-			task.wait(0.03)
+		if isCrucifixed or not collision.Parent or collision.Anchored then break end
+		local look = Vector3.new(entityMoveDirection.X, 0, entityMoveDirection.Z)
+		if look.Magnitude > 0 then
+			look = look.Unit
+			local angle = math.rad(math.random(-60, 60))
+			local direction = CFrame.fromAxisAngle(Vector3.yAxis, angle):VectorToWorldSpace(look)
+			direction = Vector3.new(direction.X, 0, direction.Z).Unit
+			collision:ApplyImpulse(direction * force)
+			collision:ApplyAngularImpulse(Vector3.new(
+				math.random(-1, 1),
+				math.random(-1, 1),
+				math.random(-1, 1)
+			) * mass * 15)
 		end
+		task.wait(0.03)
 	end
 end
 
 local function setupModel(model, room, targets)
-	if not model:IsA("Model") or isBlacklisted(model) or hasTargetParent(model, room) then return end
+	if isCrucifixed or not model:IsA("Model") or isBlacklisted(model) or hasTargetParent(model, room) then return end
 
 	local existingCollision
 	local hasScriptCollision = false
@@ -213,7 +298,7 @@ local function setupModel(model, room, targets)
 	table.insert(targets, collision)
 
 	collision:GetPropertyChangedSignal("Anchored"):Connect(function()
-		if not collision.Anchored then
+		if not isCrucifixed and not collision.Anchored then
 			task.spawn(shakeCollision, collision)
 		end
 	end)
@@ -244,10 +329,12 @@ local function setupModel(model, room, targets)
 end
 
 local function BreakRoom(room)
-	if not room then return end
+	if isCrucifixed or not room then return end
 
 	task.spawn(function()
 		task.wait(0.02)
+		if isCrucifixed then return end
+
 		local assetContainer = room:FindFirstChild("Assets") or room
 
 		local breakSound = Instance.new("Sound")
@@ -277,13 +364,17 @@ local function BreakRoom(room)
 
 		local targets = {}
 		for _, v in ipairs(room:GetDescendants()) do
+			if isCrucifixed then return end
 			if v:IsA("Model") then
 				setupModel(v, room, targets)
 			end
 		end
 
+		if isCrucifixed then return end
+
 		local currentDir = entityMoveDirection
 		for _, collision in ipairs(targets) do
+			if isCrucifixed then break end
 			if collision and collision.Parent and collision:GetAttribute("WindCollision") == true then
 				collision.Anchored = false
 				collision.AssemblyLinearVelocity = (currentDir * math.random(50, 90)) + Vector3.new(0, math.random(15, 35), 0)
@@ -318,6 +409,306 @@ local function TriggerExtremeShake()
 end
 
 -- ========================================================
+--            FULL CRUCIFIX EFFECT (REPENTANCE)             --
+-- ========================================================
+local function PlayFullCrucifixEffect(entityObj)
+	local model = entityObj and entityObj.Model or activeSpawnedModel or Workspace:FindFirstChild("multimonster")
+	if not model or not model.Parent then return end
+
+	isCrucifixed = true
+	model:SetAttribute("BeingBanished", true)
+	model:SetAttribute("Paused", true)
+	model:SetAttribute("Damage", false)
+	LetPlayingSoundsFinish(model)
+
+	pcall(function()
+		local char = LocalPlayer.Character
+		local tool = char and (char:FindFirstChild("Crucifix") or char:FindFirstChild("Cruxy"))
+		if tool and tool:IsA("Tool") then
+			tool:Destroy()
+		end
+	end)
+
+	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local entityPivot = model:GetPivot()
+
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { character, model }
+
+	local result = Workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params)
+	local groundPos = result and result.Position or (entityPivot.Position - Vector3.new(0, 4, 0))
+
+	local repentanceAsset
+	pcall(function()
+		repentanceAsset = LoadCustomInstance("https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main/Assets/Repentance.rbxm")
+	end)
+
+	local camShaker
+	pcall(function()
+		local camShakerMod = ReplicatedStorage:FindFirstChild("CameraShaker", true)
+		if camShakerMod then
+			local CameraShaker = require(camShakerMod)
+			camShaker = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
+				local curCam = Workspace.CurrentCamera
+				if curCam then curCam.CFrame = curCam.CFrame * shakeCf end
+			end)
+			camShaker:Start()
+			camShaker:ShakeOnce(5, 20, 2, Vector3.zero)
+		end
+	end)
+
+	if not repentanceAsset then
+		if model and model.Parent then model:Destroy() end
+		return
+	end
+
+	local Repentance = repentanceAsset:Clone()
+	local Crucifix = Repentance:FindFirstChild("Crucifix")
+	local Handle = Crucifix and Crucifix:FindFirstChild("Handle")
+	local Pentagram = Repentance:FindFirstChild("Pentagram")
+	local EntityPart = Repentance:FindFirstChild("Entity")
+	local Sound = Handle and Handle:FindFirstChild("Sound")
+
+	Repentance:PivotTo(CFrame.new(groundPos))
+	if Crucifix then
+		Crucifix:PivotTo(character:GetPivot())
+	end
+	if EntityPart then
+		EntityPart.CFrame = entityPivot
+	end
+	Repentance.Parent = Workspace
+
+	if Sound and Sound:IsA("Sound") then
+		Sound:Play()
+	end
+
+	local function waitUntil(t: number)
+		if not Sound or not Sound.IsPlaying then
+			task.wait(math.min(t, 2))
+			return
+		end
+		local guard = tick()
+		repeat
+			RunService.RenderStepped:Wait()
+		until not Sound.Parent or not Sound.IsPlaying or Sound.TimePosition >= t or (tick() - guard) > 15
+	end
+
+	local function fadeOut()
+		if not Pentagram then return end
+		for _, v in ipairs(Pentagram:GetChildren()) do
+			if v.Name == "BeamFlat" then
+				task.delay(v:GetAttribute("Delay") or 0, function()
+					if v and v.Parent then
+						pcall(function()
+							TweenService:Create(
+								v,
+								TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+								{ Brightness = 0 }
+							):Play()
+						end)
+					end
+				end)
+			elseif v.Name == "BeamChain" then
+				pcall(function()
+					TweenService:Create(
+						v,
+						TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+						{ Brightness = 0 }
+					):Play()
+				end)
+			end
+		end
+	end
+
+	local crucifixColor = Color3.fromRGB(137, 207, 255)
+	for _, v in ipairs(Repentance:GetDescendants()) do
+		if v:HasTag("GiveMeColor") then
+			if v:IsA("Light") or v:IsA("BasePart") then
+				v.Color = crucifixColor
+			elseif v:IsA("ParticleEmitter") or v:IsA("Beam") then
+				v.Color = ColorSequence.new({
+					ColorSequenceKeypoint.new(0, crucifixColor),
+					ColorSequenceKeypoint.new(1, crucifixColor),
+				})
+			end
+		end
+	end
+
+	task.spawn(function()
+		while EntityPart and EntityPart.Parent and model and model.Parent do
+			model:PivotTo(EntityPart.CFrame)
+			RunService.RenderStepped:Wait()
+		end
+		if model and model.Parent then
+			model:Destroy()
+		end
+	end)
+
+	if Pentagram and Pentagram:FindFirstChild("Circle") then
+		local circle = Pentagram.Circle
+		TweenService:Create(
+			circle,
+			TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
+			{ CFrame = circle.CFrame - Vector3.new(0, 25, 0) }
+		):Play()
+		task.delay(2, function()
+			if circle and circle.Parent then circle:Destroy() end
+		end)
+	end
+
+	if Handle then
+		local bodyPos = Handle:FindFirstChild("BodyPosition")
+		if bodyPos then
+			bodyPos.Position = (character:GetPivot() * CFrame.new(1, 4, -6)).Position
+		end
+
+		local bodyAngVel = Handle:FindFirstChild("BodyAngularVelocity")
+		if bodyAngVel then
+			TweenService:Create(
+				bodyAngVel,
+				TweenInfo.new(4, Enum.EasingStyle.Cubic, Enum.EasingDirection.In),
+				{ AngularVelocity = Vector3.new(0, 40, 0) }
+			):Play()
+		end
+
+		task.delay(3, function()
+			local shards = Handle:FindFirstChild("Shards")
+			if shards then
+				for _, shard in ipairs(shards:GetChildren()) do
+					pcall(function()
+						shard.CollisionGroup = "NoPlayer"
+						shard.CanCollide = true
+						if shard:FindFirstChild("Weld") then shard.Weld:Destroy() end
+						shard.AssemblyAngularVelocity = Vector3.zero
+					end)
+				end
+			end
+		end)
+	end
+
+	if EntityPart then
+		TweenService:Create(
+			EntityPart,
+			TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In),
+			{ CFrame = EntityPart.CFrame + Vector3.new(0, 2, 0) }
+		):Play()
+	end
+
+	task.spawn(function()
+		waitUntil(2.625)
+
+		local pentLight = Pentagram and Pentagram:FindFirstChild("Base")
+			and Pentagram.Base:FindFirstChild("LightAttach")
+			and Pentagram.Base.LightAttach:FindFirstChild("LightBright")
+		local handleLight = Handle and Handle:FindFirstChild("Light")
+
+		if pentLight then
+			TweenService:Create(pentLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
+				Brightness = 5,
+				Range = 40,
+			}):Play()
+		end
+		if handleLight then
+			TweenService:Create(handleLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
+				Brightness = 11.25,
+				Range = 30,
+			}):Play()
+		end
+
+		task.wait(1.5)
+
+		if pentLight then
+			TweenService:Create(pentLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
+				Brightness = 0,
+				Range = 0,
+			}):Play()
+		end
+		if handleLight then
+			TweenService:Create(handleLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
+				Brightness = 0,
+				Range = 0,
+			}):Play()
+		end
+
+		if handleLight then
+			TweenService:Create(handleLight, TweenInfo.new(1, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
+				Brightness = 15,
+				Range = 40,
+			}):Play()
+		end
+
+		if camShaker and camShaker.StartFadeOut then
+			pcall(function() camShaker:StartFadeOut(3) end)
+		end
+		fadeOut()
+
+		local bodyAngVel = Handle and Handle:FindFirstChild("BodyAngularVelocity")
+		if bodyAngVel then
+			TweenService:Create(
+				bodyAngVel,
+				TweenInfo.new(3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out),
+				{ AngularVelocity = Vector3.zero }
+			):Play()
+		end
+	end)
+
+	waitUntil(2.5)
+
+	if EntityPart then
+		TweenService:Create(
+			EntityPart,
+			TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+			{ CFrame = EntityPart.CFrame - Vector3.new(0, 50, 0) }
+		):Play()
+	end
+
+	for _, s in ipairs(model:GetDescendants()) do
+		if s:IsA("Sound") and not s:GetAttribute("VolumeIgnore") then
+			TweenService:Create(
+				s,
+				TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+				{ Volume = 0 }
+			):Play()
+		end
+	end
+
+	waitUntil(6.75)
+
+	if Handle and Handle:FindFirstChild("Glow") then
+		TweenService:Create(Handle.Glow, TweenInfo.new(1), {
+			Size = Handle.Glow.Size * 3,
+			Transparency = 1,
+		}):Play()
+	end
+
+	local pentLight = Pentagram and Pentagram:FindFirstChild("Base")
+		and Pentagram.Base:FindFirstChild("LightAttach")
+		and Pentagram.Base.LightAttach:FindFirstChild("LightBright")
+	local handleLight = Handle and Handle:FindFirstChild("Light")
+
+	if pentLight then
+		TweenService:Create(pentLight, TweenInfo.new(1), { Brightness = 0, Range = 0 }):Play()
+	end
+	if handleLight then
+		TweenService:Create(handleLight, TweenInfo.new(1), { Brightness = 0, Range = 0 }):Play()
+	end
+
+	if Handle and Handle:FindFirstChild("ExplodeParticle") then
+		Handle.ExplodeParticle:Emit(math.random(20, 30))
+	end
+	if camShaker and camShaker.ShakeOnce then
+		pcall(function() camShaker:ShakeOnce(7.5, 7.5, 0.25, 1.5) end)
+	end
+
+	task.delay(5, function()
+		if Repentance and Repentance.Parent then
+			Repentance:Destroy()
+		end
+	end)
+end
+
+-- ========================================================
 --               CHECK ĐIỀU KIỆN XUẤT HIỆN                  --
 -- ========================================================
 if Workspace:FindFirstChild("SeekMovingNewClone") then
@@ -333,7 +724,9 @@ customScream.Volume = 10
 customScream.Parent = SoundService
 
 ContentProvider:PreloadAsync({ customScream }, function()
-	customScream:Play()
+	if not isCrucifixed then
+		customScream:Play()
+	end
 end)
 
 local achievementGiver = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
@@ -499,11 +892,16 @@ if not entity then return end
 -- ========================================================
 --                      CALLBACKS                         --
 -- ========================================================
-entity:SetCallback("OnSpawned", function()
-	multimonsterIsMoving = false
-	entityLastPosition = nil
+entity:SetCallback("CrucifixionOverwrite", function()
+	PlayFullCrucifixEffect(entity)
+end)
 
-	local part = entity.Model or Workspace:WaitForChild("multimonster", 5)
+entity:SetCallback("OnSpawned", function()
+	isCrucifixed = false
+	entityLastPosition = nil
+	activeSpawnedModel = entity.Model or Workspace:WaitForChild("multimonster", 5)
+
+	local part = activeSpawnedModel
 	if not part then return end
 
 	local object = part:WaitForChild("RushNew", 5)
@@ -511,7 +909,7 @@ entity:SetCallback("OnSpawned", function()
 
 	local dirConn
 	dirConn = RunService.RenderStepped:Connect(function()
-		if not part or not part.Parent then
+		if isCrucifixed or not part or not part.Parent then
 			if dirConn then dirConn:Disconnect() end
 			return
 		end
@@ -534,31 +932,34 @@ entity:SetCallback("OnSpawned", function()
 	if object:IsA("BasePart") then object.CanCollide = false end
 	if not e then return end
 
-		local originalTexture = e.Texture
-task.spawn(function()
-	local textures = {
-		"rbxassetid://12145534911", "rbxassetid://12145554242",
-		"rbxassetid://12145599498", "rbxassetid://12145599275",
-		"rbxassetid://12155335619", "rbxassetid://12145598814",
-		"rbxassetid://12146135062", "rbxassetid://11378285585",
-	}
-	while part and part.Parent do
-		for _, tex in ipairs(textures) do
-			if not (part and part.Parent) then break end
-			e.Texture = tex
-			task.wait(0)
+	local originalTexture = e.Texture
+	task.spawn(function()
+		local textures = {
+			"rbxassetid://12145534911", "rbxassetid://12145554242",
+			"rbxassetid://12145599498", "rbxassetid://12145599275",
+			"rbxassetid://12155335619", "rbxassetid://12145598814",
+			"rbxassetid://12146135062", "rbxassetid://11378285585",
+		}
+		while not isCrucifixed and part and part.Parent do
+			for _, tex in ipairs(textures) do
+				if isCrucifixed or not (part and part.Parent) then break end
+				e.Texture = tex
+				task.wait(0)
+			end
 		end
-	end
-	if e and e.Parent then
-		e.Texture = originalTexture
-	end
-  end)
+		if e and e.Parent then
+			e.Texture = originalTexture
+		end
+	end)
 end)
 
 entity:SetCallback("OnStartMoving", function()
+	if isCrucifixed then return end
 	print("multimonster has started moving")
 
 	task.spawn(function()
+		if isCrucifixed then return end
+
 		local urls = {
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak2.mp3", "ripbreak2" },
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreak3.mp3", "ripbreak3" },
@@ -574,9 +975,12 @@ entity:SetCallback("OnStartMoving", function()
 		breaking.Looped = true
 		breaking.RollOffMaxDistance = 1000000000
 		breaking.Volume = 0
+		activeBreakingSound = breaking
 
 		pcall(function()
-			breaking:Play()
+			if not isCrucifixed then
+				breaking:Play()
+			end
 		end)
 
 		local conn
@@ -592,8 +996,23 @@ entity:SetCallback("OnStartMoving", function()
 					breaking:Stop()
 					breaking:Destroy()
 				end
+				if activeBreakingSound == breaking then
+					activeBreakingSound = nil
+				end
 				if conn then
 					conn:Disconnect()
+				end
+				return
+			end
+
+			if isCrucifixed then
+				breaking.Looped = false
+				if conn then
+					conn:Disconnect()
+				end
+				AttachFinishCleanup(breaking)
+				if activeBreakingSound == breaking then
+					activeBreakingSound = nil
 				end
 				return
 			end
@@ -613,12 +1032,19 @@ entity:SetCallback("OnStartMoving", function()
 			if conn then
 				conn:Disconnect()
 			end
-			breaking:Destroy()
+			if activeBreakingSound == breaking then
+				activeBreakingSound = nil
+			end
+			if breaking and breaking.Parent then
+				breaking:Destroy()
+			end
 		end)
 	end)
 end)
 
 entity:SetCallback("OnDamagePlayer", function(newHealth)
+	if isCrucifixed then return end
+
 	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
@@ -665,7 +1091,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 
 			local renderConnection
 			renderConnection = RunService.RenderStepped:Connect(function()
-				if not isJumpscaring then
+				if isCrucifixed or not isJumpscaring then
 					if renderConnection then renderConnection:Disconnect() end
 					return
 				end
@@ -753,8 +1179,9 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 end)
 
 entity:SetCallback("OnEnterRoom", function(room, firstTime)
-	if room then
-		BreakRoom(room)
+	if isCrucifixed or not room then return end
+	BreakRoom(room)
+	if not isCrucifixed then
 		doorSound1:Play()
 		doorSound2:Play()
 	end
@@ -762,13 +1189,13 @@ end)
 
 entity:SetCallback("OnDespawned", function()
 	print("multimonster has despawned")
+	LetPlayingSoundsFinish(activeSpawnedModel)
+
+	if isCrucifixed then
+		return
+	end
+
 	TriggerExtremeShake()
-
-	pcall(function()
-		doorSound1:Stop()
-		doorSound2:Stop()
-	end)
-
 	GiveMultimonsterAchievement()
 
 	local lighting = Lighting:FindFirstChild("MainColorCorrection")
@@ -791,4 +1218,4 @@ entity:SetCallback("OnDespawned", function()
 	end)
 end)
 
-entity:Run(true)
+entity:Run(true) 
