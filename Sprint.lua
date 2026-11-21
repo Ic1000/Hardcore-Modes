@@ -12,7 +12,7 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 -- Lấy RemotesFolder chuẩn của Doors
 local remotesFolder = ReplicatedStorage:FindFirstChild("EntityInfo") or ReplicatedStorage:FindFirstChild("Bricks") or ReplicatedStorage:FindFirstChild("RemotesFolder")
 
--- Đọc cấu hình: chỉ giữ lại usewhileloading theo yêu cầu
+-- Đọc cấu hình: chỉ giữ lại usewhileloading theo yêu cầu + bổ sung thông số từ bản kia
 local cfg = _G.mobile_sprint_config or {}
 local CONFIG = {
 	usewhileloading = cfg.usewhileloading ~= nil and cfg.usewhileloading or true,
@@ -20,7 +20,8 @@ local CONFIG = {
 	staminadrain = 20,
 	staminaregen = 15,
 	regendelay = 1.5,
-	sprintboost = 5,
+	sprintboost = 4,
+	chaseextra = 6,
 	overlaydarkness = 0.4,
 	soundvolume = 3,
 }
@@ -29,6 +30,44 @@ local stamina = CONFIG.maxstamina
 local isSprinting = false
 local isExhausted = false
 local lastSprintTime = 0
+local sprintHeldPC = false
+
+-- Lấy Main_Game module (dùng cho caption & trạng thái chase nếu có)
+local mainGameModule = nil
+local function RefreshMainGame()
+	pcall(function()
+		local mgScript = player:WaitForChild("PlayerGui", 5)
+			:WaitForChild("MainUI", 5)
+			:WaitForChild("Initiator", 5)
+			:WaitForChild("Main_Game", 5)
+		if mgScript and mgScript:IsA("ModuleScript") then
+			mainGameModule = require(mgScript)
+		end
+	end)
+end
+RefreshMainGame()
+
+local function ShowCaption(text)
+	pcall(function()
+		if not mainGameModule then
+			RefreshMainGame()
+		end
+		if mainGameModule and type(mainGameModule.caption) == "function" then
+			mainGameModule.caption(text, true)
+		end
+	end)
+end
+
+local function IsChasing()
+	return mainGameModule and mainGameModule.chase == true
+end
+
+local function GetActiveBoost()
+	if not isSprinting then
+		return 0
+	end
+	return CONFIG.sprintboost + (IsChasing() and CONFIG.chaseextra or 0)
+end
 
 -- Tạo Sound Kiệt Sức
 local soundExhausted = Instance.new("Sound")
@@ -82,7 +121,54 @@ local function SetupCollisionBypass(char)
 	end)
 end
 
+-- Cơ chế Vitamins: hồi +30 máu & đầy stamina (cooldown 10s)
+local vitaminsCooldown = false
+local vitaminsAddedConn = nil
+local vitaminsActConn = nil
+local vitaminsUnequipConn = nil
+
+local function BindVitamins(char)
+	if vitaminsAddedConn then vitaminsAddedConn:Disconnect() end
+	if vitaminsActConn then vitaminsActConn:Disconnect() end
+	if vitaminsUnequipConn then vitaminsUnequipConn:Disconnect() end
+
+	vitaminsAddedConn = char.ChildAdded:Connect(function(child)
+		if child.Name == "Vitamins" and child:IsA("Tool") then
+			if vitaminsActConn then vitaminsActConn:Disconnect() end
+			if vitaminsUnequipConn then vitaminsUnequipConn:Disconnect() end
+
+			vitaminsActConn = child.Activated:Connect(function()
+				if vitaminsCooldown then return end
+				vitaminsCooldown = true
+
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				if hum and hum.Health > 0 then
+					hum.Health = math.min(hum.Health + 30, hum.MaxHealth)
+				end
+
+				stamina = CONFIG.maxstamina
+				isExhausted = false
+				if soundExhausted.IsPlaying then
+					soundExhausted:Stop()
+				end
+
+				task.delay(10, function()
+					vitaminsCooldown = false
+				end)
+			end)
+
+			vitaminsUnequipConn = child.Unequipped:Connect(function()
+				if vitaminsActConn then
+					vitaminsActConn:Disconnect()
+					vitaminsActConn = nil
+				end
+			end)
+		end
+	end)
+end
+
 SetupCollisionBypass(character)
+BindVitamins(character)
 
 player.CharacterAdded:Connect(function(newCharacter)
 	character = newCharacter
@@ -91,6 +177,7 @@ player.CharacterAdded:Connect(function(newCharacter)
 	stamina = CONFIG.maxstamina
 	isSprinting = false
 	isExhausted = false
+	sprintHeldPC = false
 	CollisionClone = nil
 	
 	if soundExhausted.IsPlaying then
@@ -98,6 +185,7 @@ player.CharacterAdded:Connect(function(newCharacter)
 	end
 	character:SetAttribute("SpeedBoost", 0)
 	SetupCollisionBypass(character)
+	BindVitamins(character)
 end)
 
 -- Cơ chế chạy ngầm Speed Bypass tự động 100% không cần bật tắt
@@ -109,16 +197,20 @@ task.spawn(function()
 	end
 end)
 
--- Mobile UI
-if UserInputService.TouchEnabled then
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "SprintGui"
-	screenGui.ResetOnSpawn = false
-	screenGui.IgnoreGuiInset = true
-	screenGui.DisplayOrder = 999999
-	screenGui.Parent = player:WaitForChild("PlayerGui")
+-- GUI & Logic Sprint (hỗ trợ cả Mobile lẫn PC giữ phím Q)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SprintGui"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.DisplayOrder = 999999
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
-	local sprintButton = Instance.new("TextButton")
+local sprintButton = nil
+local staminaBg = nil
+local staminaBar = nil
+
+if UserInputService.TouchEnabled then
+	sprintButton = Instance.new("TextButton")
 	sprintButton.Name = "SprintButton"
 	sprintButton.Size = UDim2.new(0, 65, 0, 65)
 	sprintButton.Position = UDim2.new(1, -206, 1, -103)
@@ -140,7 +232,7 @@ if UserInputService.TouchEnabled then
 	btnStroke.Thickness = 2
 	btnStroke.Parent = sprintButton
 
-	local staminaBg = Instance.new("Frame")
+	staminaBg = Instance.new("Frame")
 	staminaBg.Name = "StaminaBG"
 	staminaBg.Size = UDim2.new(0, 220, 0, 14)
 	staminaBg.Position = UDim2.new(1, -235, 1, -30)
@@ -159,7 +251,7 @@ if UserInputService.TouchEnabled then
 	bgStroke.Transparency = 0.5
 	bgStroke.Parent = staminaBg
 
-	local staminaBar = Instance.new("Frame")
+	staminaBar = Instance.new("Frame")
 	staminaBar.Name = "StaminaBar"
 	staminaBar.Size = UDim2.new(1, 0, 1, 0)
 	staminaBar.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
@@ -169,50 +261,70 @@ if UserInputService.TouchEnabled then
 	local barCorner = Instance.new("UICorner")
 	barCorner.CornerRadius = UDim.new(0, 6)
 	barCorner.Parent = staminaBar
+end
 
-	local darkOverlay = Instance.new("Frame")
-	darkOverlay.Name = "DarkOverlay"
-	darkOverlay.Size = UDim2.new(1, 0, 1, 0)
-	darkOverlay.Position = UDim2.new(0, 0, 0, 0)
-	darkOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-	darkOverlay.BackgroundTransparency = 1
-	darkOverlay.ZIndex = 100
-	darkOverlay.Active = false
-	darkOverlay.Parent = screenGui
+local darkOverlay = Instance.new("Frame")
+darkOverlay.Name = "DarkOverlay"
+darkOverlay.Size = UDim2.new(1, 0, 1, 0)
+darkOverlay.Position = UDim2.new(0, 0, 0, 0)
+darkOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+darkOverlay.BackgroundTransparency = 1
+darkOverlay.ZIndex = 100
+darkOverlay.Active = false
+darkOverlay.Parent = screenGui
 
-	local function stopSprinting()
-		isSprinting = false
+-- Hiệu ứng ảnh tối viền lấy từ bản Sprint kia
+local vignetteImage = Instance.new("ImageLabel")
+vignetteImage.Name = "VignetteOverlay"
+vignetteImage.Size = UDim2.new(1, 0, 1, 0)
+vignetteImage.Position = UDim2.new(0, 0, 0, 0)
+vignetteImage.BackgroundTransparency = 1
+vignetteImage.Image = "rbxassetid://190596490"
+vignetteImage.ImageColor3 = Color3.fromRGB(0, 0, 0)
+vignetteImage.ImageTransparency = 1
+vignetteImage.ZIndex = 99
+vignetteImage.Parent = screenGui
+
+local function RefreshSprintButtonVisual()
+	if not sprintButton then return end
+	if isSprinting then
+		sprintButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+		sprintButton.BackgroundTransparency = 0.2
+	elseif isExhausted then
+		sprintButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+		sprintButton.BackgroundTransparency = 0.7
+	else
+		sprintButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		sprintButton.BackgroundTransparency = 0.4
+	end
+end
+
+local function stopSprinting()
+	isSprinting = false
+	if character then
+		character:SetAttribute("SpeedBoost", 0)
+	end
+	RefreshSprintButtonVisual()
+end
+
+local function startSprinting()
+	if not humanoid or humanoid.Health <= 0 then return end
+	if character and (character:GetAttribute("Hiding") == true or character:GetAttribute("Crouching") == true) then return end
+	
+	local isGameLoaded = game:IsLoaded()
+	if not isGameLoaded and not CONFIG.usewhileloading then return end
+	if isExhausted or stamina <= 0 then return end
+
+	if (CONFIG.usewhileloading and not isGameLoaded) or (humanoid and humanoid.MoveDirection.Magnitude > 0) then
+		isSprinting = true
 		if character then
-			character:SetAttribute("SpeedBoost", 0)
+			character:SetAttribute("SpeedBoost", GetActiveBoost())
 		end
-		
-		if isExhausted then
-			sprintButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-			sprintButton.BackgroundTransparency = 0.7
-		else
-			sprintButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-			sprintButton.BackgroundTransparency = 0.4
-		end
+		RefreshSprintButtonVisual()
 	end
+end
 
-	local function startSprinting()
-		if not humanoid or humanoid.Health <= 0 then return end
-		if character and (character:GetAttribute("Hiding") == true or character:GetAttribute("Crouching") == true) then return end
-		
-		local isGameLoaded = game:IsLoaded()
-		if not isGameLoaded and not CONFIG.usewhileloading then return end
-		if isExhausted or stamina <= 0 then return end
-
-		if (CONFIG.usewhileloading and not isGameLoaded) or (humanoid and humanoid.MoveDirection.Magnitude > 0) then
-			isSprinting = true
-			if character then
-				character:SetAttribute("SpeedBoost", CONFIG.sprintboost)
-			end
-			sprintButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-			sprintButton.BackgroundTransparency = 0.2
-		end
-	end
-
+if sprintButton then
 	sprintButton.Activated:Connect(function()
 		if isSprinting then
 			stopSprinting()
@@ -220,65 +332,92 @@ if UserInputService.TouchEnabled then
 			startSprinting()
 		end
 	end)
+end
 
-	RunService.Heartbeat:Connect(function(deltaTime)
-		local isCrouching = (character and character:GetAttribute("Crouching") == true)
-		
-		if not humanoid or humanoid.Health <= 0 or (character and character:GetAttribute("Hiding") == true) or isCrouching then
-			if isSprinting then
+-- PC input: giữ Q để sprint
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Q then
+		sprintHeldPC = true
+		startSprinting()
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.KeyCode == Enum.KeyCode.Q then
+		sprintHeldPC = false
+		if isSprinting then
+			stopSprinting()
+		end
+	end
+end)
+
+RunService.Heartbeat:Connect(function(deltaTime)
+	local isCrouching = (character and character:GetAttribute("Crouching") == true)
+	
+	if not humanoid or humanoid.Health <= 0 or (character and character:GetAttribute("Hiding") == true) or isCrouching then
+		if isSprinting then
+			stopSprinting()
+		end
+		if soundExhausted.IsPlaying then
+			soundExhausted:Stop()
+		end
+		return
+	end
+
+	if sprintHeldPC and not isSprinting and not isExhausted and stamina > 0 then
+		startSprinting()
+	end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	local currentHorizontalSpeed = 0
+	if hrp then
+		local velocity = hrp.AssemblyLinearVelocity
+		currentHorizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+	end
+
+	local isGameLoaded = game:IsLoaded()
+
+	if isSprinting then
+		if (not humanoid or humanoid.MoveDirection.Magnitude == 0) or ((isGameLoaded or not CONFIG.usewhileloading) and currentHorizontalSpeed < 2) then
+			stopSprinting()
+		else
+			character:SetAttribute("SpeedBoost", GetActiveBoost())
+			stamina = math.clamp(stamina - (CONFIG.staminadrain * deltaTime), 0, CONFIG.maxstamina)
+			lastSprintTime = os.clock()
+			
+			if stamina <= 0 then
+				if not isExhausted then
+					isExhausted = true
+					ShowCaption("You're exhausted.")
+					if not soundExhausted.IsPlaying then
+						soundExhausted:Play()
+					end
+				end
 				stopSprinting()
 			end
-			if soundExhausted.IsPlaying then
+		end
+	else
+		if os.clock() - lastSprintTime >= CONFIG.regendelay then
+			stamina = math.clamp(stamina + (CONFIG.staminaregen * deltaTime), 0, CONFIG.maxstamina)
+			
+			if stamina > 100 and soundExhausted.IsPlaying then
 				soundExhausted:Stop()
 			end
-			return
-		end
 
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		local currentHorizontalSpeed = 0
-		if hrp then
-			local velocity = hrp.AssemblyLinearVelocity
-			currentHorizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
-		end
-
-		local isGameLoaded = game:IsLoaded()
-
-		if isSprinting then
-			if (not humanoid or humanoid.MoveDirection.Magnitude == 0) or ((isGameLoaded or not CONFIG.usewhileloading) and currentHorizontalSpeed < 2) then
-				stopSprinting()
-			else
-				stamina = math.clamp(stamina - (CONFIG.staminadrain * deltaTime), 0, CONFIG.maxstamina)
-				lastSprintTime = os.clock()
-				
-				if stamina <= 0 then
-					if not isExhausted then
-						isExhausted = true
-						if not soundExhausted.IsPlaying then
-							soundExhausted:Play()
-						end
-					end
-					stopSprinting()
-				end
-			end
-		else
-			if os.clock() - lastSprintTime >= CONFIG.regendelay then
-				stamina = math.clamp(stamina + (CONFIG.staminaregen * deltaTime), 0, CONFIG.maxstamina)
-				
-				if stamina > 100 and soundExhausted.IsPlaying then
-					soundExhausted:Stop()
-				end
-
-				if isExhausted and stamina >= CONFIG.maxstamina then
-					isExhausted = false
-					sprintButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-					sprintButton.BackgroundTransparency = 0.4
-				end
+			if isExhausted and stamina >= CONFIG.maxstamina then
+				isExhausted = false
+				RefreshSprintButtonVisual()
 			end
 		end
+	end
 
-		local darknessLevel = 1 - ((1 - (stamina / CONFIG.maxstamina)) * CONFIG.overlaydarkness)
-		darkOverlay.BackgroundTransparency = darknessLevel
+	local exhaustionRatio = 1 - (stamina / CONFIG.maxstamina)
+	local darknessLevel = 1 - (exhaustionRatio * CONFIG.overlaydarkness)
+	darkOverlay.BackgroundTransparency = darknessLevel
+	vignetteImage.ImageTransparency = math.clamp(1 - (exhaustionRatio * 0.85), 0, 1)
 
+	if staminaBar then
 		local targetSize = UDim2.new(stamina / CONFIG.maxstamina, 0, 1, 0)
 		staminaBar:TweenSize(targetSize, Enum.EasingDirection.Out, Enum.EasingStyle.Linear, 0.1, true)
 
@@ -289,5 +428,5 @@ if UserInputService.TouchEnabled then
 		else
 			staminaBar.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
 		end
-	end)
-end
+	end
+end)
