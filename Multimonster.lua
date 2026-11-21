@@ -1,5 +1,5 @@
 -- ========================================================
---                  SERVICES & KHAI BÁO TOÀN CỤC            --
+--     MULTIMONSTER SCRIPT (CHUYỂN SANG OGHUNGERNEWSPAWNER)
 -- ========================================================
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -13,15 +13,17 @@ local ContentProvider = game:GetService("ContentProvider")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 
 local debounce = false
 local isJumpscaring = false
 local destroyedsounds = false
 
-local speed
-if getgenv().FasterTrouble then 
-speed = 400 else speed = math.random(267, 350)
-end
+local speed 
+if getgenv().FasterTrouble then
+speed = 400
+else 
+speed = math.random(267, 350) end
 
 -- Khai báo biến âm thanh cửa an toàn
 local doorSound1 = Instance.new("Sound")
@@ -36,7 +38,7 @@ doorSound2.Parent = SoundService
 
 -- Biến lưu trữ hướng di chuyển của thực thể (tính theo frame)
 local entityLastPosition = nil
-local entityMoveDirection = Vector3.new(0, 0, -1) -- Hướng mặc định
+local entityMoveDirection = Vector3.new(0, 0, -1)
 
 -- DANH SÁCH ẢNH JUMPSCARE 2D
 local ALL_JUMPSCARE_IMAGES = {
@@ -45,21 +47,21 @@ local ALL_JUMPSCARE_IMAGES = {
 	"rbxassetid://113785746563976",
 	"rbxassetid://106324997569765",
 	"rbxassetid://93365716697080",
-	"rbxassetid://72735059720396"
+	"rbxassetid://72735059720396",
 }
 
---========================================================--
+-- ========================================================
 --                  HELPER FUNCTIONS                      --
---========================================================--
+-- ========================================================
 local function GetGitSound(GithubSnd, SoundName)
 	local sound = Instance.new("Sound")
-	
+
 	local success = pcall(function()
 		if writefile and isfile and not isfile(SoundName .. ".mp3") then
 			writefile(SoundName .. ".mp3", game:HttpGet(GithubSnd))
 		end
 	end)
-	
+
 	local assetFunc = getcustomasset or getsynasset
 	if success and assetFunc then
 		local assetSuccess, assetResult = pcall(function()
@@ -70,25 +72,24 @@ local function GetGitSound(GithubSnd, SoundName)
 			return sound
 		end
 	end
-	
+
 	sound.SoundId = GithubSnd
 	return sound
 end
 
---========================================================--
--- ADVANCED DIRECTIONAL PUSHABLE ROOM BREAK (TỪ SCRIPT FEN) --
---========================================================--
-local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
+-- ========================================================
+-- ADVANCED DIRECTIONAL PUSHABLE ROOM BREAK               --
+-- ========================================================
 local TARGET_MASS = 0
 
 local blacklist = {
-	"wardrobe", "rafter", "bed", "rug", "carpet", "sideroom", "key", 
-	"drawer", "breaker", "table", "desk", "gold", "dresser", "rift", 
-	"chest", "floor", "wall", "door", "ceiling", "light", "beam", 
-	"model", "chandelier", "window", "curtain", "gate", "stairs", 
-	"vent", "lattice", "barrelstack", "smoothie", "rolltop", "dupe", 
-	"boards", "crucifix", "flashlight", "moonfloat", "lockpick", 
-	"candle", "skeleton key", "fireplace"
+	"wardrobe", "rafter", "bed", "rug", "carpet", "sideroom", "key",
+	"drawer", "breaker", "table", "desk", "gold", "dresser", "rift",
+	"chest", "floor", "wall", "door", "ceiling", "light", "beam",
+	"model", "chandelier", "window", "curtain", "gate", "stairs",
+	"vent", "lattice", "barrelstack", "smoothie", "rolltop", "dupe",
+	"boards", "crucifix", "flashlight", "moonfloat", "lockpick",
+	"candle", "skeleton key", "fireplace",
 }
 
 local function hasAncestorContaining(object, text)
@@ -135,18 +136,21 @@ end
 local function shakeCollision(collision)
 	if not collision or collision.Anchored then return end
 	local mass = collision.AssemblyMass
-	local force = mass * 5 
-	for i = 1, 8 do
+	local force = mass * 5
+	for _ = 1, 8 do
 		if collision.Parent and not collision.Anchored then
-			local look = entityMoveDirection
-			look = Vector3.new(look.X, 0, look.Z)
+			local look = Vector3.new(entityMoveDirection.X, 0, entityMoveDirection.Z)
 			if look.Magnitude > 0 then
 				look = look.Unit
 				local angle = math.rad(math.random(-60, 60))
 				local direction = CFrame.fromAxisAngle(Vector3.yAxis, angle):VectorToWorldSpace(look)
 				direction = Vector3.new(direction.X, 0, direction.Z).Unit
 				collision:ApplyImpulse(direction * force)
-				collision:ApplyAngularImpulse(Vector3.new(math.random(-1, 1), math.random(-1, 1), math.random(-1, 1)) * mass * 15)
+				collision:ApplyAngularImpulse(Vector3.new(
+					math.random(-1, 1),
+					math.random(-1, 1),
+					math.random(-1, 1)
+				) * mass * 15)
 			end
 			task.wait(0.03)
 		end
@@ -168,9 +172,9 @@ local function setupModel(model, room, targets)
 		end
 	end
 
-	if existingCollision then 
-		table.insert(targets, existingCollision) 
-		return 
+	if existingCollision then
+		table.insert(targets, existingCollision)
+		return
 	end
 	if hasScriptCollision then return end
 
@@ -200,7 +204,7 @@ local function setupModel(model, room, targets)
 	collision.CastShadow = false
 	collision.Anchored = true
 	collision.Massless = false
-	
+
 	collision.CustomPhysicalProperties = PhysicalProperties.new(density, 0.3, 0.5, 1, 1)
 	collision:SetAttribute("WindCollision", true)
 	collision:SetAttribute("Picked", false)
@@ -241,34 +245,34 @@ end
 
 local function BreakRoom(room)
 	if not room then return end
-	
+
 	task.spawn(function()
 		task.wait(0.02)
 		local assetContainer = room:FindFirstChild("Assets") or room
 
 		local breakSound = Instance.new("Sound")
 		local breakSoundsList = {
-			"rbxassetid://9125992545", 
+			"rbxassetid://9125992545",
 			"rbxassetid://4004052860",
-			"rbxassetid://7142857558", 
+			"rbxassetid://7142857558",
 			"rbxassetid://7142843615",
-			"rbxassetid://2612674531", 
-			"rbxassetid://2174790942"
+			"rbxassetid://2612674531",
+			"rbxassetid://2174790942",
 		}
-		
+
 		breakSound.SoundId = breakSoundsList[math.random(1, #breakSoundsList)]
 
 		if not destroyedsounds then
 			destroyedsounds = true
-			breakSound.Volume = math.random(28, 38) / 10 
+			breakSound.Volume = math.random(28, 38) / 10
 		else
 			breakSound.Volume = 1
 		end
 
 		breakSound.Parent = assetContainer
 		breakSound:Play()
-		breakSound.Ended:Connect(function() 
-			breakSound:Destroy() 
+		breakSound.Ended:Connect(function()
+			breakSound:Destroy()
 		end)
 
 		local targets = {}
@@ -282,7 +286,6 @@ local function BreakRoom(room)
 		for _, collision in ipairs(targets) do
 			if collision and collision.Parent and collision:GetAttribute("WindCollision") == true then
 				collision.Anchored = false
-				-- Tinh chỉnh lực văng nhẹ nhàng theo hướng đi, không bay vọt lên trời
 				collision.AssemblyLinearVelocity = (currentDir * math.random(50, 90)) + Vector3.new(0, math.random(15, 35), 0)
 				collision.AssemblyAngularVelocity = Vector3.new(
 					math.random(-25, 25),
@@ -300,7 +303,7 @@ local function TriggerExtremeShake()
 			local character = LocalPlayer.Character
 			local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 			if humanoid and humanoid.Health <= 0 then return end
-			
+
 			local CameraShakerModule = require(ReplicatedStorage:WaitForChild("CameraShaker", 5))
 			local camera = Workspace.CurrentCamera
 			if CameraShakerModule and camera then
@@ -314,13 +317,22 @@ local function TriggerExtremeShake()
 	end)
 end
 
+-- ========================================================
+--               CHECK ĐIỀU KIỆN XUẤT HIỆN                  --
+-- ========================================================
+if Workspace:FindFirstChild("SeekMovingNewClone") then
+	repeat
+		task.wait()
+	until not Workspace:FindFirstChild("SeekMovingNewClone")
+end
+
 local customScream = Instance.new("Sound")
 customScream.Name = "CustomSpawnScream"
 customScream.SoundId = "rbxassetid://112497140615036"
 customScream.Volume = 10
-customScream.Parent = SoundService 
+customScream.Parent = SoundService
 
-ContentProvider:PreloadAsync({customScream}, function()
+ContentProvider:PreloadAsync({ customScream }, function()
 	customScream:Play()
 end)
 
@@ -338,122 +350,209 @@ local function GiveMultimonsterAchievement()
 				Title = "A Nostalgic Frights...",
 				Desc = "Might Come Back...",
 				Reason = "Survive the rare Entity Designed as Multimonster.",
-				Image = "rbxassetid://100946605902758"
+				Image = "rbxassetid://100946605902758",
 			})
 		end)
 	end
 end
 
---========================================================--
---               CHECK ĐIỀU KIỆN XUẤT HIỆN                  --
---========================================================--
-if Workspace:FindFirstChild("SeekMovingNewClone") or (Workspace:FindFirstChild("CurrentRooms") and Workspace.CurrentRooms:FindFirstChild("100")) then
-	repeat task.wait() until not Workspace:FindFirstChild("SeekMovingNewClone") and not (Workspace:FindFirstChild("CurrentRooms") and Workspace.CurrentRooms:FindFirstChild("100"))
+-- ========================================================
+-- LOAD OGHUNGERNEWSPAWNER & TẠO ENTITY
+-- ========================================================
+getgenv().OgHungerNewSpawner = nil
+local success, Spawner = pcall(function()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/eoyoustme/Mayhem-Remake/refs/heads/main/OgHungerNewSpawner"))()
+end)
+
+if not success or not Spawner then
+	warn("[MULTIMONSTER] Không tải được OgHungerNewSpawner")
+	return
 end
 
----====== Load spawner ======---
-local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Entity%20Spawner/V2/Source.lua"))()
-
----====== Create entity ======---
-local entity = spawner.Create({
+local entity = Spawner:Create({
 	Entity = {
 		Name = "multimonster",
 		Asset = "rbxassetid://74103016339839",
-		HeightOffset = 0
+		HeightOffset = 0,
 	},
 	Lights = {
-		Flicker = { Enabled = false, Duration = 1 },
+		Flicker = {
+			Enabled = false,
+			Duration = 1,
+		},
 		Shatter = false,
-		Repair = false
+		Repair = false,
 	},
-	Earthquake = { Enabled = false },
+	Earthquake = {
+		Enabled = false,
+	},
+	Spawned = {
+		ChangeColorWhenSpawn = false,
+		Rainbow = false,
+		Color = Color3.fromRGB(0, 85, 255),
+	},
 	CameraShake = {
 		Enabled = true,
 		Range = 150,
-		Values = {18, 25, 0.05, 0.1}
+		Values = { 18, 25, 0.05, 0.1 },
 	},
 	Movement = {
 		Speed = speed,
+		SpeedFast = 470,
+		MoveFastNotEnter = false,
+		IsMoveWhenWHere = false,
 		Delay = math.random(1, 1.5),
-		Reversed = false
+		Reversed = false,
+		EndWhenEnterLatestRoom = false,
+		EndDelay = 0,
+		ReboundMoving = false,
+		TweenSecond = 1.5,
+		ReboundMoveStyle = false,
+		ReboundStyleTimes = 5,
+		ReboundStyleSound = "rbxassetid://9114221327",
+		ReboundStyleVolume = 5,
+		ReboundStyleDelay = 2,
+		IsMoveBackWardAndMore = false,
+		FasterAndFaster = false,
+		ChasePlayerWhenSee = false,
+		SpeedWhenChase = 35,
+		GlitchMove = false,
+		GlitchMoveSoundId = "rbxassetid://0",
+		Fakeout = {
+			Enabled = false,
+			RandomFakeout = false,
+			EndSound = "rbxassetid://0",
+			EndDelay = 2,
+			SpeedMultiplier = 1,
+		},
+	},
+	Jumpscare = {
+		Enabled = false,
+		Image1 = "rbxassetid://11253398403",
+		Image2 = "rbxassetid://12293509957",
+		Sound1 = "rbxassetid://0",
+		Sound2 = "rbxassetid://109582246349306",
+		Tease = {
+			[1] = true,
+			Min = 1,
+			Max = 1,
+		},
+		Flashing = {
+			[1] = true,
+			[2] = Color3.fromRGB(255, 255, 255),
+		},
+		Shake = true,
 	},
 	Rebounding = {
 		Enabled = true,
 		Type = "Ambush",
 		Min = 2,
 		Max = math.random(5, 6),
-		Delay = math.random(1, 2)
+		Delay = math.random(1, 2),
 	},
-	Damage = { Enabled = true, Range = 60, Amount = 125 },
+	Damage = {
+		Enabled = true,
+		KillOnMove = false,
+		Range = 60,
+		Amount = 125,
+		Cooldown = 1,
+		IgnoreHiding = false,
+		JumpscareRipper = {
+			Enabled = false,
+			TargetPartName = "Ripe",
+			AttachmentName = "ripe",
+			ParticleName = "ParticleEmitter",
+			ParticleTexture = "rbxassetid://12737595583",
+			SoundUrl = "https://github.com/eoyoustme/back/raw/main/Kill_with_static.mp3",
+			SlamSoundId = "rbxassetid://0",
+			EndSoundId = "rbxassetid://4988621968",
+			Images = {
+				"rbxassetid://8482795900",
+				"rbxassetid://236542974",
+				"rbxassetid://184251462",
+				"rbxassetid://236777652",
+			},
+			FlashDuration = 1.6,
+		},
+	},
 	Crucifixion = {
+		Type = "Guiding",
 		Enabled = true,
 		Range = 60,
 		Resist = false,
-		Break = true
+		Break = true,
 	},
 	Death = {
 		Type = "Curious",
-		Hints = {"You fell victim to Multimonster...", "It travels at terrifying speeds across multiple rooms...", "Listen closely for its loud approach and hide immediately...", "Do not let it catch you in its line of sight!..."},
-		Cause = "Multimonster"
-	}
+		Hints = {
+			"You fell victim to Multimonster...",
+			"It travels at terrifying speeds across multiple rooms...",
+			"Listen closely for its loud approach and hide immediately...",
+			"Do not let it catch you in its line of sight!...",
+		},
+		Cause = "Multimonster",
+	},
 })
 
----====== Callbacks ======---
-entity:SetCallback("OnSpawned", function()		
+if not entity then return end
+
+-- ========================================================
+--                      CALLBACKS                         --
+-- ========================================================
+entity:SetCallback("OnSpawned", function()
 	multimonsterIsMoving = false
 	entityLastPosition = nil
-	
-	local part = Workspace:WaitForChild("multimonster", 5)
+
+	local part = entity.Model or Workspace:WaitForChild("multimonster", 5)
 	if not part then return end
 
 	local object = part:WaitForChild("RushNew", 5)
 	if not object then return end
-	
-	RunService.RenderStepped:Connect(function()
-		if part and part.Parent then
-			local primaryPart = part.PrimaryPart
-			if primaryPart then
-				local currentPos = primaryPart.Position
-				if entityLastPosition then
-					local diff = currentPos - entityLastPosition
-					if diff.Magnitude > 0.01 then
-						entityMoveDirection = diff.Unit
-					end
+
+	local dirConn
+	dirConn = RunService.RenderStepped:Connect(function()
+		if not part or not part.Parent then
+			if dirConn then dirConn:Disconnect() end
+			return
+		end
+		local primaryPart = part.PrimaryPart or object
+		if primaryPart then
+			local currentPos = primaryPart.Position
+			if entityLastPosition then
+				local diff = currentPos - entityLastPosition
+				if diff.Magnitude > 0.01 then
+					entityMoveDirection = diff.Unit
 				end
-				entityLastPosition = currentPos
 			end
+			entityLastPosition = currentPos
 		end
 	end)
 
 	local attachment = object:WaitForChild("Main", 5)
 	local e = attachment and attachment:WaitForChild("Face", 5)
-	
+
 	if object:IsA("BasePart") then object.CanCollide = false end
 	if not e then return end
-	
-	local originalTexture = e.Texture
-	task.spawn(function()
-		local textures = {
-			"rbxassetid://12145534911", "rbxassetid://12145554242",
-			"rbxassetid://12145599498", "rbxassetid://12145599275",
-			"rbxassetid://12155335619", "rbxassetid://12145598814",
-			"rbxassetid://12146135062", "rbxassetid://11378285585"
-		}
-		while part and part.Parent do
-			if isJumpscaring then
-				for _, tex in ipairs(textures) do
-					if not isJumpscaring then break end
-					e.Texture = tex
-					task.wait(0)
-				end
-			else
-				if e.Texture ~= originalTexture then
-					e.Texture = originalTexture
-				end
-				task.wait(0.1)
-			end
+
+		local originalTexture = e.Texture
+task.spawn(function()
+	local textures = {
+		"rbxassetid://12145534911", "rbxassetid://12145554242",
+		"rbxassetid://12145599498", "rbxassetid://12145599275",
+		"rbxassetid://12155335619", "rbxassetid://12145598814",
+		"rbxassetid://12146135062", "rbxassetid://11378285585",
+	}
+	while part and part.Parent do
+		for _, tex in ipairs(textures) do
+			if not (part and part.Parent) then break end
+			e.Texture = tex
+			task.wait(0)
 		end
-	end)
+	end
+	if e and e.Parent then
+		e.Texture = originalTexture
+	end
+  end)
 end)
 
 entity:SetCallback("OnStartMoving", function()
@@ -463,7 +562,7 @@ entity:SetCallback("OnStartMoving", function()
 		local urls = {
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak2.mp3", "ripbreak2" },
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreak3.mp3", "ripbreak3" },
-			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak1.mp3", "ripbreak1" }
+			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak1.mp3", "ripbreak1" },
 		}
 		local pick = urls[math.random(1, #urls)]
 		local Github = GetGitSound(pick[1], pick[2])
@@ -474,20 +573,18 @@ entity:SetCallback("OnStartMoving", function()
 		breaking.Parent = Workspace
 		breaking.Looped = true
 		breaking.RollOffMaxDistance = 1000000000
-		breaking.Volume = 0 
-		
+		breaking.Volume = 0
+
 		pcall(function()
 			breaking:Play()
 		end)
 
-		local player = Players.LocalPlayer
-
 		local conn
 		conn = RunService.Heartbeat:Connect(function()
-			local character = player.Character
+			local character = LocalPlayer.Character
 			local hrp = character and character:FindFirstChild("HumanoidRootPart")
-			
-			local womp = Workspace:FindFirstChild("multimonster")
+
+			local womp = entity.Model or Workspace:FindFirstChild("multimonster")
 			local ripe = womp and (womp:FindFirstChild("RushNew") or womp.PrimaryPart)
 
 			if not hrp or not womp or not ripe or not breaking.Parent then
@@ -508,7 +605,7 @@ entity:SetCallback("OnStartMoving", function()
 					breaking:Play()
 				end
 			else
-				breaking.Volume = 0 
+				breaking.Volume = 0
 			end
 		end)
 
@@ -522,12 +619,11 @@ entity:SetCallback("OnStartMoving", function()
 end)
 
 entity:SetCallback("OnDamagePlayer", function(newHealth)
-	local player = Players.LocalPlayer
-	local character = player.Character or player.CharacterAdded:Wait()
+	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local HumanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-	local womp = Workspace:WaitForChild("multimonster", 2)
-	
+	local womp = entity.Model or Workspace:WaitForChild("multimonster", 2)
+
 	if not womp then return end
 	local wompwomp = womp:FindFirstChild("RushNew")
 	if not wompwomp then return end
@@ -535,7 +631,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 	if not character:GetAttribute("Hiding") and not debounce then
 		debounce = true
 		isJumpscaring = true
-       
+
 		pcall(function()
 			for _, v in pairs(womp:GetDescendants()) do
 				if v:IsA("Sound") and v.IsPlaying then
@@ -546,13 +642,13 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 
 		pcall(function()
 			if HumanoidRootPart then HumanoidRootPart.Anchored = true end
-			
+
 			local savedTransparencies = {}
 			if wompwomp:IsA("BasePart") then
 				savedTransparencies[wompwomp] = wompwomp.Transparency
 				wompwomp.Transparency = 1
 			end
-			
+
 			for _, child in ipairs(wompwomp:GetDescendants()) do
 				if child:IsA("BasePart") then
 					savedTransparencies[child] = child.Transparency
@@ -564,9 +660,9 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 					child.Transparency = 0
 				end
 			end
-			
+
 			if wompwomp:IsA("BasePart") then wompwomp.Anchored = true end
-			
+
 			local renderConnection
 			renderConnection = RunService.RenderStepped:Connect(function()
 				if not isJumpscaring then
@@ -583,25 +679,25 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 					humanoid.WalkSpeed = 0
 				end
 			end)
-			
+
 			local scareSound = GetGitSound("https://github.com/thefigureblack/audios/blob/main/asixtyScareOmg.mp3?raw=true", "asixtyScareOmg")
 			scareSound.Parent = Workspace
 			scareSound.Volume = 7.5
 			scareSound:Play()
-			
+
 			task.wait(0.5)
-			
+
 			for part, originalTransparency in pairs(savedTransparencies) do
 				if part and part.Parent then
 					part.Transparency = originalTransparency
 				end
 			end
-			
+
 			local screenGui = Instance.new("ScreenGui")
 			screenGui.Name = "A60_JumpscareGui"
-			screenGui.Parent = player:WaitForChild("PlayerGui")
+			screenGui.Parent = PlayerGui
 			screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-			
+
 			local randomSelectedImage = ALL_JUMPSCARE_IMAGES[math.random(1, #ALL_JUMPSCARE_IMAGES)]
 			local jumpscareImg = Instance.new("ImageLabel")
 			jumpscareImg.Name = "JumpscareImage"
@@ -613,7 +709,7 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			jumpscareImg.Image = randomSelectedImage
 			jumpscareImg.ImageTransparency = 0
 			jumpscareImg.ImageColor3 = Color3.fromRGB(255, 0, 0)
-			
+
 			local colorCorrection = Instance.new("ColorCorrectionEffect", Lighting)
 			TweenService:Create(colorCorrection, TweenInfo.new(0.2), {
 				Brightness = 0.2,
@@ -621,18 +717,18 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 				Saturation = -0.3,
 				TintColor = Color3.fromRGB(255, 0, 4),
 			}):Play()
-			
-			if HumanoidRootPart then HumanoidRootPart.Anchored = false end					
+
+			if HumanoidRootPart then HumanoidRootPart.Anchored = false end
 
 			TweenService:Create(jumpscareImg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Size = UDim2.new(1.2, 0, 1.4, 0),
-				Rotation = math.random(-20, 20)
+				Rotation = math.random(-20, 20),
 			}):Play()
-			
-			task.wait(0.5)
-			isJumpscaring = false	
 
-			local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })					
+			task.wait(0.5)
+			isJumpscaring = false
+
+			local fadeTween = TweenService:Create(jumpscareImg, TweenInfo.new(3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { ImageTransparency = 1 })
 
 			local function SafeCleanup()
 				pcall(function()
@@ -645,11 +741,11 @@ entity:SetCallback("OnDamagePlayer", function(newHealth)
 			fadeTween:Play()
 			fadeTween.Completed:Connect(SafeCleanup)
 			task.delay(2.5, SafeCleanup)
-			
+
 			Debris:AddItem(screenGui, 4)
 			Debris:AddItem(colorCorrection, 3)
 			Debris:AddItem(scareSound, 3)
-			
+
 			task.wait(1)
 			debounce = false
 		end)
@@ -667,33 +763,32 @@ end)
 entity:SetCallback("OnDespawned", function()
 	print("multimonster has despawned")
 	TriggerExtremeShake()
-	multimonsterIsMoving = false
-	
+
 	pcall(function()
 		doorSound1:Stop()
 		doorSound2:Stop()
 	end)
-	
+
 	GiveMultimonsterAchievement()
-	
+
 	local lighting = Lighting:FindFirstChild("MainColorCorrection")
 	if not lighting then
 		lighting = Instance.new("ColorCorrectionEffect")
 		lighting.Name = "MainColorCorrection"
 		lighting.Parent = Lighting
 	end
-	
+
 	lighting.TintColor = Color3.fromRGB(255, 30, 30)
 	lighting.Contrast = 0.5
 	lighting.Saturation = 0.5
-	
+
 	task.delay(7, function()
 		TweenService:Create(lighting, TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			TintColor = Color3.fromRGB(255, 255, 255),
 			Contrast = 0,
-			Saturation = 0
+			Saturation = 0,
 		}):Play()
 	end)
 end)
 
-entity:Run()
+entity:Run(true)
