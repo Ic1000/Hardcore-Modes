@@ -521,7 +521,7 @@ local function PlayFullCrucifixEffect(entityObj)
 		end
 	end
 
-	local crucifixColor = Color3.fromRGB(137, 207, 255)
+	local crucifixColor = Color3.fromRGB(255, 227, 137)
 	for _, v in ipairs(Repentance:GetDescendants()) do
 		if v:HasTag("GiveMeColor") then
 			if v:IsA("Light") or v:IsA("BasePart") then
@@ -766,14 +766,14 @@ local entity = Spawner:Create({
 	Entity = {
 		Name = "multimonster",
 		Asset = "rbxassetid://74103016339839",
-		HeightOffset = -4,
+		HeightOffset = -3,
 	},
 	Lights = {
 		Flicker = {
 			Enabled = false,
 			Duration = 1,
 		},
-		Shatter = false,
+		Shatter = true,
 		Repair = false,
 	},
 	Earthquake = {
