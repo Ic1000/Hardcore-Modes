@@ -13,24 +13,50 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Camera = workspace.CurrentCamera
 
-local VYNIXU_ROOT = "https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main" --[span_6](start_span)[span_6](end_span)
+-- Chống nhiều instance Rebound chạy chồng lên nhau
+local env = (getgenv and getgenv()) or _G
+if env.HardcoreReboundActive == true then
+	return
+end
+
+env.HardcoreReboundActive = true
+env.HardcoreReboundSessionId = (env.HardcoreReboundSessionId or 0) + 1
+local currentSessionId = env.HardcoreReboundSessionId
+
+local lockReleased = false
+local function ReleaseReboundLock()
+	if lockReleased then
+		return
+	end
+	lockReleased = true
+	if env.HardcoreReboundSessionId == currentSessionId then
+		env.HardcoreReboundActive = false
+	end
+end
+
+if env.ReboundAchivement ~= nil then
+	env.ReboundAchivement = true
+end
+
+local VYNIXU_ROOT = "https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main"
 
 -- Variables
 local maxRebounds = 5
 local reboundCount = 0
 local isJumpscaring = false
 local isBanished = false
+local completedFullCycleAndDestroyed = false
 
 local CrucifixSettings = {
 	Enabled = true,
-	Type = "Guiding", -- "Guiding" hoặc "Curious" --[span_7](start_span)[span_7](end_span)
+	Type = "Guiding", -- "Guiding" hoặc "Curious"
 	Range = 60,
-	Resist = false, -- Đổi thành true nếu muốn test chế độ kháng thánh giá giống file gốc --[span_8](start_span)[span_8](end_span)
+	Resist = false, -- Đổi thành true nếu muốn test chế độ kháng thánh giá giống file gốc
 }
 
 local CrucifixColors = {
-	["guiding"] = Color3.fromRGB(137, 207, 255), --[span_9](start_span)[span_9](end_span)
-	["curious"] = Color3.fromRGB(255, 227, 137), --[span_10](start_span)[span_10](end_span)
+	["guiding"] = Color3.fromRGB(137, 207, 255),
+	["curious"] = Color3.fromRGB(255, 227, 137),
 }
 
 -- ====== UTILS & AUDIO ======
@@ -120,7 +146,7 @@ local function GetRepentanceTemplate()
 	if repentanceTemplate and repentanceTemplate.Parent then
 		return repentanceTemplate
 	end
-	repentanceTemplate = LoadCustomInstance(VYNIXU_ROOT .. "/Assets/Repentance.rbxm", ReplicatedStorage) --[span_11](start_span)[span_11](end_span)
+	repentanceTemplate = LoadCustomInstance(VYNIXU_ROOT .. "/Assets/Repentance.rbxm", ReplicatedStorage)
 	if repentanceTemplate then
 		repentanceTemplate.Parent = nil
 	end
@@ -131,7 +157,7 @@ task.spawn(function()
 	pcall(GetRepentanceTemplate)
 end)
 
-local speed = getgenv().FasterTrouble and 1.4 or 1.8
+local speed = env.FasterTrouble and 1.4 or 1.8
 
 local function HasCrucifixEquipped()
 	local char = LocalPlayer.Character
@@ -176,7 +202,7 @@ end
 local function GetGiveMeColorDescendants(root)
 	local list = {}
 	local ok = pcall(function()
-		list = root:QueryDescendants(".GiveMeColor") --[span_12](start_span)[span_12](end_span)
+		list = root:QueryDescendants(".GiveMeColor")
 	end)
 	if ok and #list > 0 then
 		return list
@@ -204,14 +230,51 @@ local function PivotModelSafely(model, targetCFrame)
 	end)
 end
 
+-- ====== THÀNH TỰU KHI REBOUND ĐI HẾT VÒNG VÀ DESTROY ======
+local function GiveReboundAchievement()
+	if isBanished or not completedFullCycleAndDestroyed then
+		return
+	end
+
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return
+	end
+
+	task.spawn(function()
+		local success, achievementGiver = pcall(function()
+			return loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Custom%20Achievements/Source.lua"))()
+		end)
+
+		if success and achievementGiver then
+			local payload = {
+				Title = "Out Of Many Rebound..",
+				Desc = "I will come back..or not..",
+				Reason = "Survive and Encounter Rebound..",
+				Image = "rbxassetid://13856279697"
+			}
+
+			pcall(function()
+				if typeof(achievementGiver) == "function" then
+					achievementGiver(payload)
+				elseif typeof(achievementGiver) == "table" and typeof(achievementGiver.Give) == "function" then
+					achievementGiver.Give(payload)
+				end
+			end)
+		end
+	end)
+end
+
 -- ====== FULL CRUCIFIX / REPENTANCE MECHANIC (GIỐNG BẢN GỐC) ======
 local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
-	local resist = CrucifixSettings.Resist == true --[span_13](start_span)[span_13](end_span)
+	local resist = CrucifixSettings.Resist == true
 
 	if not resist then
 		if isBanished then return end
 		isBanished = true
 		isJumpscaring = true
+		completedFullCycleAndDestroyed = false
 		if stopMoveFn then
 			pcall(stopMoveFn)
 		end
@@ -223,22 +286,22 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 		or CFrame.new()
 
 	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude --[span_14](start_span)[span_14](end_span)
+	params.FilterType = Enum.RaycastFilterType.Exclude
 	local exclude = {}
 	if char then table.insert(exclude, char) end
 	if rootModel then table.insert(exclude, rootModel) end
 	if entityPart then table.insert(exclude, entityPart) end
-	params.FilterDescendantsInstances = exclude --[span_15](start_span)[span_15](end_span)
+	params.FilterDescendantsInstances = exclude
 
-	local result = workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params) --[span_16](start_span)[span_16](end_span)
+	local result = workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params)
 	if not result then
 		result = { Position = entityPivot.Position - Vector3.new(0, 4, 0) }
 	end
 
 	pcall(function()
 		if rootModel then
-			rootModel:SetAttribute("BeingBanished", true) --[span_17](start_span)[span_17](end_span)
-			rootModel:SetAttribute("Paused", true) --[span_18](start_span)[span_18](end_span)
+			rootModel:SetAttribute("BeingBanished", true)
+			rootModel:SetAttribute("Paused", true)
 			for _, desc in ipairs(rootModel:GetDescendants()) do
 				if desc:IsA("BasePart") then
 					desc.Anchored = true
@@ -255,10 +318,10 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 	local mainCamShaker
 	local theShake
 	pcall(function()
-		local mainGame = require(PlayerGui:WaitForChild("MainUI"):WaitForChild("Initiator"):WaitForChild("Main_Game")) --[span_19](start_span)[span_19](end_span)
-		mainCamShaker = mainGame.camShaker --[span_20](start_span)[span_20](end_span)
+		local mainGame = require(PlayerGui:WaitForChild("MainUI"):WaitForChild("Initiator"):WaitForChild("Main_Game"))
+		mainCamShaker = mainGame.camShaker
 		if mainCamShaker then
-			theShake = mainCamShaker:StartShake(5, 20, 2, Vector3.zero) --[span_21](start_span)[span_21](end_span)
+			theShake = mainCamShaker:StartShake(5, 20, 2, Vector3.zero)
 		end
 	end)
 
@@ -270,32 +333,32 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 		return
 	end
 
-	local Repentance = template:Clone() --[span_22](start_span)[span_22](end_span)
-	local Crucifix = Repentance:FindFirstChild("Crucifix") --[span_23](start_span)[span_23](end_span)
-	local Handle = Crucifix and Crucifix:FindFirstChild("Handle") --[span_24](start_span)[span_24](end_span)
-	local Pentagram = Repentance:FindFirstChild("Pentagram") --[span_25](start_span)[span_25](end_span)
-	local EntityPart = Repentance:FindFirstChild("Entity") --[span_26](start_span)[span_26](end_span)
-	local Sound = Handle and Handle:FindFirstChild(resist and "SoundFail" or "Sound") --[span_27](start_span)[span_27](end_span)
+	local Repentance = template:Clone()
+	local Crucifix = Repentance:FindFirstChild("Crucifix")
+	local Handle = Crucifix and Crucifix:FindFirstChild("Handle")
+	local Pentagram = Repentance:FindFirstChild("Pentagram")
+	local EntityPart = Repentance:FindFirstChild("Entity")
+	local Sound = Handle and Handle:FindFirstChild(resist and "SoundFail" or "Sound")
 
-	local charPivot = (char and char:GetPivot()) or Camera.CFrame --[span_28](start_span)[span_28](end_span)
+	local charPivot = (char and char:GetPivot()) or Camera.CFrame
 
 	pcall(function()
-		Repentance:PivotTo(CFrame.new(result.Position)) --[span_29](start_span)[span_29](end_span)
+		Repentance:PivotTo(CFrame.new(result.Position))
 		if Crucifix then
-			Crucifix:PivotTo(charPivot) --[span_30](start_span)[span_30](end_span)
+			Crucifix:PivotTo(charPivot)
 		end
 		if EntityPart and EntityPart:IsA("BasePart") then
 			EntityPart.Anchored = true
 			EntityPart.CanCollide = false
-			EntityPart.CFrame = entityPivot --[span_31](start_span)[span_31](end_span)
+			EntityPart.CFrame = entityPivot
 		end
 	end)
 
-	Repentance.Parent = workspace --[span_32](start_span)[span_32](end_span)
+	Repentance.Parent = workspace
 
 	if Sound and Sound:IsA("Sound") then
 		pcall(function()
-			Sound:Play() --[span_33](start_span)[span_33](end_span)
+			Sound:Play()
 		end)
 	end
 
@@ -310,28 +373,28 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 					break
 				end
 			end
-			RunService.RenderStepped:Wait() --[span_34](start_span)[span_34](end_span)
+			RunService.RenderStepped:Wait()
 		end
 	end
 
 	local function fadeOut()
 		if not Pentagram then return end
-		for _, v in ipairs(Pentagram:GetChildren()) do --[span_35](start_span)[span_35](end_span)
-			if v.Name == "BeamFlat" then --[span_36](start_span)[span_36](end_span)
-				task.delay(v:GetAttribute("Delay") or 0, function() --[span_37](start_span)[span_37](end_span)
+		for _, v in ipairs(Pentagram:GetChildren()) do
+			if v.Name == "BeamFlat" then
+				task.delay(v:GetAttribute("Delay") or 0, function()
 					if v and v.Parent then
 						TweenService:Create(
 							v,
-							TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In), --[span_38](start_span)[span_38](end_span)
-							{ Brightness = 0 } --[span_39](start_span)[span_39](end_span)
+							TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+							{ Brightness = 0 }
 						):Play()
 					end
 				end)
-			elseif v.Name == "BeamChain" then --[span_40](start_span)[span_40](end_span)
+			elseif v.Name == "BeamChain" then
 				TweenService:Create(
 					v,
-					TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In), --[span_41](start_span)[span_41](end_span)
-					{ Brightness = 0 } --[span_42](start_span)[span_42](end_span)
+					TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+					{ Brightness = 0 }
 				):Play()
 			end
 		end
@@ -339,15 +402,15 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 
 	-- Set pentagram color
 	local colorKey = tostring(CrucifixSettings.Type or "Guiding"):lower()
-	local Color = CrucifixColors[colorKey] or CrucifixColors.guiding --[span_43](start_span)[span_43](end_span)
+	local Color = CrucifixColors[colorKey] or CrucifixColors.guiding
 
 	for _, v in ipairs(GetGiveMeColorDescendants(Repentance)) do
-		if v:IsA("Light") or v:IsA("BasePart") then --[span_44](start_span)[span_44](end_span)
-			v.Color = Color --[span_45](start_span)[span_45](end_span)
-		elseif v:IsA("ParticleEmitter") or v:IsA("Beam") then --[span_46](start_span)[span_46](end_span)
+		if v:IsA("Light") or v:IsA("BasePart") then
+			v.Color = Color
+		elseif v:IsA("ParticleEmitter") or v:IsA("Beam") then
 			v.Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0, Color), --[span_47](start_span)[span_47](end_span)
-				ColorSequenceKeypoint.new(1, Color), --[span_48](start_span)[span_48](end_span)
+				ColorSequenceKeypoint.new(0, Color),
+				ColorSequenceKeypoint.new(1, Color),
 			})
 		end
 	end
@@ -370,22 +433,22 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 					targetCF = EntityPart.CFrame * offsetFromEntityPart
 				end
 				PivotModelSafely(targetEntityRoot, targetCF)
-				RunService.RenderStepped:Wait() --[span_49](start_span)[span_49](end_span)
+				RunService.RenderStepped:Wait()
 			end
 		end
 	end)
 
 	-- Pentagram animation
-	if Pentagram and Pentagram:FindFirstChild("Circle") then --[span_50](start_span)[span_50](end_span)
+	if Pentagram and Pentagram:FindFirstChild("Circle") then
 		local circle = Pentagram.Circle
 		TweenService:Create(
 			circle,
-			TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), --[span_51](start_span)[span_51](end_span)
-			{ CFrame = circle.CFrame - Vector3.new(0, 25, 0) } --[span_52](start_span)[span_52](end_span)
+			TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
+			{ CFrame = circle.CFrame - Vector3.new(0, 25, 0) }
 		):Play()
 		task.delay(2, function()
 			if circle and circle.Parent then
-				circle:Destroy() --[span_53](start_span)[span_53](end_span)
+				circle:Destroy()
 			end
 		end)
 	end
@@ -395,30 +458,30 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 		local bodyPos = Handle:FindFirstChild("BodyPosition")
 		local bodyAngVel = Handle:FindFirstChild("BodyAngularVelocity")
 		if bodyPos then
-			bodyPos.Position = (charPivot * CFrame.new(1, 4, -6)).Position --[span_54](start_span)[span_54](end_span)
+			bodyPos.Position = (charPivot * CFrame.new(1, 4, -6)).Position
 		end
 		if bodyAngVel then
 			TweenService:Create(
 				bodyAngVel,
-				TweenInfo.new(4, Enum.EasingStyle.Cubic, Enum.EasingDirection.In), --[span_55](start_span)[span_55](end_span)
-				{ AngularVelocity = Vector3.new(0, 40, 0) } --[span_56](start_span)[span_56](end_span)
+				TweenInfo.new(4, Enum.EasingStyle.Cubic, Enum.EasingDirection.In),
+				{ AngularVelocity = Vector3.new(0, 40, 0) }
 			):Play()
 		end
 
 		task.delay(3, function()
 			local shards = Handle:FindFirstChild("Shards")
 			if shards then
-				for _, shard in ipairs(shards:GetChildren()) do --[span_57](start_span)[span_57](end_span)
+				for _, shard in ipairs(shards:GetChildren()) do
 					if shard:IsA("BasePart") then
 						pcall(function()
-							shard.CollisionGroup = "NoPlayer" --[span_58](start_span)[span_58](end_span)
+							shard.CollisionGroup = "NoPlayer"
 						end)
-						shard.CanCollide = true --[span_59](start_span)[span_59](end_span)
+						shard.CanCollide = true
 						local weld = shard:FindFirstChild("Weld")
 						if weld then
-							weld:Destroy() --[span_60](start_span)[span_60](end_span)
+							weld:Destroy()
 						end
-						shard.AssemblyAngularVelocity = Vector3.zero --[span_61](start_span)[span_61](end_span)
+						shard.AssemblyAngularVelocity = Vector3.zero
 					end
 				end
 			end
@@ -430,15 +493,15 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 	if not resist and EntityPart and EntityPart:IsA("BasePart") then
 		liftTween = TweenService:Create(
 			EntityPart,
-			TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In), --[span_62](start_span)[span_62](end_span)
-			{ CFrame = EntityPart.CFrame + Vector3.new(0, 2, 0) } --[span_63](start_span)[span_63](end_span)
+			TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In),
+			{ CFrame = EntityPart.CFrame + Vector3.new(0, 2, 0) }
 		)
 		liftTween:Play()
 	end
 
 	-- Ritual animation
 	task.spawn(function()
-		waitUntil(2.625) --[span_64](start_span)[span_64](end_span)
+		waitUntil(2.625)
 		if not Repentance.Parent then return end
 
 		local pentLight = Pentagram
@@ -450,33 +513,33 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 		if pentLight then
 			TweenService:Create(
 				pentLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_65](start_span)[span_65](end_span)
-				{ Brightness = 5, Range = 40 } --[span_66](start_span)[span_66](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 5, Range = 40 }
 			):Play()
 		end
 		if handleLight then
 			TweenService:Create(
 				handleLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_67](start_span)[span_67](end_span)
-				{ Brightness = 11.25, Range = 30 } --[span_68](start_span)[span_68](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 11.25, Range = 30 }
 			):Play()
 		end
 
-		task.wait(1.5) --[span_69](start_span)[span_69](end_span)
+		task.wait(1.5)
 		if not Repentance.Parent then return end
 
 		if pentLight then
 			TweenService:Create(
 				pentLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_70](start_span)[span_70](end_span)
-				{ Brightness = 0, Range = 0 } --[span_71](start_span)[span_71](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 0, Range = 0 }
 			):Play()
 		end
 		if handleLight then
 			TweenService:Create(
 				handleLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_72](start_span)[span_72](end_span)
-				{ Brightness = 0, Range = 0 } --[span_73](start_span)[span_73](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 0, Range = 0 }
 			):Play()
 		end
 
@@ -484,24 +547,24 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 			if handleLight then
 				TweenService:Create(
 					handleLight,
-					TweenInfo.new(1, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_74](start_span)[span_74](end_span)
-					{ Brightness = 15, Range = 40 } --[span_75](start_span)[span_75](end_span)
+					TweenInfo.new(1, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+					{ Brightness = 15, Range = 40 }
 				):Play()
 			end
 
 			if theShake then
 				pcall(function()
-					theShake:StartFadeOut(3) --[span_76](start_span)[span_76](end_span)
+					theShake:StartFadeOut(3)
 				end)
 			end
-			fadeOut() --[span_77](start_span)[span_77](end_span)
+			fadeOut()
 
 			local bodyAngVel = Handle and Handle:FindFirstChild("BodyAngularVelocity")
 			if bodyAngVel then
 				TweenService:Create(
 					bodyAngVel,
-					TweenInfo.new(3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), --[span_78](start_span)[span_78](end_span)
-					{ AngularVelocity = Vector3.zero } --[span_79](start_span)[span_79](end_span)
+					TweenInfo.new(3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out),
+					{ AngularVelocity = Vector3.zero }
 				):Play()
 			end
 		end
@@ -509,26 +572,26 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 
 	-- Crucifix actions (hạ thực thể -50 studs với Back.In trong 3s giống file gốc)
 	if not resist then
-		waitUntil(2.5) --[span_80](start_span)[span_80](end_span)
+		waitUntil(2.5)
 
 		local pullTween
 		if EntityPart and EntityPart:IsA("BasePart") and Repentance.Parent then
 			pullTween = TweenService:Create(
 				EntityPart,
-				TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In), --[span_81](start_span)[span_81](end_span)
-				{ CFrame = EntityPart.CFrame - Vector3.new(0, 50, 0) } --[span_82](start_span)[span_82](end_span)
+				TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+				{ CFrame = EntityPart.CFrame - Vector3.new(0, 50, 0) }
 			)
 			pullTween:Play()
 		end
 
 		local muteTarget = rootModel or entityPart
 		if muteTarget then
-			for _, snd in ipairs(muteTarget:GetDescendants()) do --[span_83](start_span)[span_83](end_span)
-				if snd:IsA("Sound") and not snd:GetAttribute("VolumeIgnore") then --[span_84](start_span)[span_84](end_span)
+			for _, snd in ipairs(muteTarget:GetDescendants()) do
+				if snd:IsA("Sound") and not snd:GetAttribute("VolumeIgnore") then
 					TweenService:Create(
 						snd,
-						TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In), --[span_85](start_span)[span_85](end_span)
-						{ Volume = 0 } --[span_86](start_span)[span_86](end_span)
+						TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+						{ Volume = 0 }
 					):Play()
 				end
 			end
@@ -540,9 +603,9 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 			task.wait(3)
 		end
 
-		waitUntil(6.75) --[span_87](start_span)[span_87](end_span)
+		waitUntil(6.75)
 	else
-		waitUntil(4) --[span_88](start_span)[span_88](end_span)
+		waitUntil(4)
 
 		local bodyAngVel = Handle and Handle:FindFirstChild("BodyAngularVelocity")
 		local pentLight = Pentagram
@@ -554,59 +617,59 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 		if bodyAngVel then
 			TweenService:Create(
 				bodyAngVel,
-				TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), --[span_89](start_span)[span_89](end_span)
-				{ AngularVelocity = Vector3.zero } --[span_90](start_span)[span_90](end_span)
+				TweenInfo.new(3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+				{ AngularVelocity = Vector3.zero }
 			):Play()
 		end
 		if pentLight then
 			TweenService:Create(
 				pentLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_91](start_span)[span_91](end_span)
-				{ Brightness = 0, Range = 0, Color = Color3.fromRGB(255, 116, 130) } --[span_92](start_span)[span_92](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 0, Range = 0, Color = Color3.fromRGB(255, 116, 130) }
 			):Play()
 		end
 		if handleLight then
 			TweenService:Create(
 				handleLight,
-				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), --[span_93](start_span)[span_93](end_span)
-				{ Brightness = 0, Range = 0, Color = Color3.fromRGB(255, 116, 130) } --[span_94](start_span)[span_94](end_span)
+				TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut),
+				{ Brightness = 0, Range = 0, Color = Color3.fromRGB(255, 116, 130) }
 			):Play()
 		end
 
 		if theShake then
 			pcall(function()
-				theShake:StartFadeOut(3) --[span_95](start_span)[span_95](end_span)
+				theShake:StartFadeOut(3)
 			end)
 		end
 
 		-- Fade pentagram to red
 		task.spawn(function()
-			local color = Instance.new("Color3Value") --[span_96](start_span)[span_96](end_span)
-			color.Value = Color3.fromRGB(137, 207, 255) --[span_97](start_span)[span_97](end_span)
+			local color = Instance.new("Color3Value")
+			color.Value = Color3.fromRGB(137, 207, 255)
 
 			local tween = TweenService:Create(
 				color,
-				TweenInfo.new(0.5, Enum.EasingStyle.Sine), --[span_98](start_span)[span_98](end_span)
-				{ Value = Color3.fromRGB(255, 116, 130) } --[span_99](start_span)[span_99](end_span)
+				TweenInfo.new(0.5, Enum.EasingStyle.Sine),
+				{ Value = Color3.fromRGB(255, 116, 130) }
 			)
-			tween:Play() --[span_100](start_span)[span_100](end_span)
+			tween:Play()
 
-			while tween.PlaybackState == Enum.PlaybackState.Playing do --[span_101](start_span)[span_101](end_span)
-				for _, d in ipairs(Repentance:GetDescendants()) do --[span_102](start_span)[span_102](end_span)
-					if d.ClassName == "Beam" then --[span_103](start_span)[span_103](end_span)
+			while tween.PlaybackState == Enum.PlaybackState.Playing do
+				for _, d in ipairs(Repentance:GetDescendants()) do
+					if d.ClassName == "Beam" then
 						d.Color = ColorSequence.new({
-							ColorSequenceKeypoint.new(0, color.Value), --[span_104](start_span)[span_104](end_span)
-							ColorSequenceKeypoint.new(1, color.Value), --[span_105](start_span)[span_105](end_span)
+							ColorSequenceKeypoint.new(0, color.Value),
+							ColorSequenceKeypoint.new(1, color.Value),
 						})
-					elseif d.Name == "Glow" then --[span_106](start_span)[span_106](end_span)
-						d.Color = color.Value --[span_107](start_span)[span_107](end_span)
+					elseif d.Name == "Glow" then
+						d.Color = color.Value
 					end
 				end
-				task.wait() --[span_108](start_span)[span_108](end_span)
+				task.wait()
 			end
 		end)
 
-		waitUntil(9.625) --[span_109](start_span)[span_109](end_span)
+		waitUntil(9.625)
 	end
 
 	-- Crucifix glow explode
@@ -621,68 +684,71 @@ local function CrucifixEntity(entityPart, rootModel, stopMoveFn)
 	if glow and glow:IsA("BasePart") then
 		TweenService:Create(
 			glow,
-			TweenInfo.new(1), --[span_110](start_span)[span_110](end_span)
-			{ Size = glow.Size * 3, Transparency = 1 } --[span_111](start_span)[span_111](end_span)
+			TweenInfo.new(1),
+			{ Size = glow.Size * 3, Transparency = 1 }
 		):Play()
 	end
 	if pentLight then
 		TweenService:Create(
 			pentLight,
-			TweenInfo.new(1), --[span_112](start_span)[span_112](end_span)
-			{ Brightness = 0, Range = 0 } --[span_113](start_span)[span_113](end_span)
+			TweenInfo.new(1),
+			{ Brightness = 0, Range = 0 }
 		):Play()
 	end
 	if handleLight then
 		TweenService:Create(
 			handleLight,
-			TweenInfo.new(1), --[span_114](start_span)[span_114](end_span)
-			{ Brightness = 0, Range = 0 } --[span_115](start_span)[span_115](end_span)
+			TweenInfo.new(1),
+			{ Brightness = 0, Range = 0 }
 		):Play()
 	end
 
 	if not resist then
 		if explodeParticle and explodeParticle:IsA("ParticleEmitter") then
-			explodeParticle:Emit(math.random(20, 30)) --[span_116](start_span)[span_116](end_span)
+			explodeParticle:Emit(math.random(20, 30))
 		end
 		if mainCamShaker then
 			pcall(function()
-				mainCamShaker:ShakeOnce(7.5, 7.5, 0.25, 1.5) --[span_117](start_span)[span_117](end_span)
+				mainCamShaker:ShakeOnce(7.5, 7.5, 0.25, 1.5)
 			end)
 		end
 
 		lockActive = false
 		task.wait(0.1)
 		if rootModel and rootModel.Parent then
-			rootModel:Destroy() --[span_118](start_span)[span_118](end_span)
+			rootModel:Destroy()
 		elseif entityPart and entityPart.Parent then
 			entityPart:Destroy()
 		end
 	else
 		pcall(function()
 			if rootModel then
-				rootModel:SetAttribute("BeingBanished", false) --[span_119](start_span)[span_119](end_span)
-				rootModel:SetAttribute("Paused", false) --[span_120](start_span)[span_120](end_span)
+				rootModel:SetAttribute("BeingBanished", false)
+				rootModel:SetAttribute("Paused", false)
 			end
 			if entityPart and entityPart:IsA("BasePart") then
 				entityPart.Anchored = false
 			end
 		end)
-		fadeOut() --[span_121](start_span)[span_121](end_span)
+		fadeOut()
 	end
 
-	Debris:AddItem(Repentance, 5) --[span_122](start_span)[span_122](end_span)
+	Debris:AddItem(Repentance, 5)
+	if not resist then
+		ReleaseReboundLock()
+	end
 end
 
 -- ====== MOVEMENT & JUMPSCARE LOGIC ======
-local function MoveRebound()
+local function MoveRebound(isFinalRebound)
 	if isBanished then
-		return
+		return false
 	end
 	isJumpscaring = false
 
 	local s = LoadCustomInstance("rbxassetid://94638439855560", workspace)
 	if not s then
-		return
+		return false
 	end
 
 	local val = 60
@@ -691,7 +757,7 @@ local function MoveRebound()
 
 	if not entity then
 		s:Destroy()
-		return
+		return false
 	end
 
 	pcall(function()
@@ -912,7 +978,7 @@ local function MoveRebound()
 	end)
 
 	local function MoveAlongCFrame(targetCF)
-		if isBanished or not entity or not entity.Parent then
+		if isBanished or isJumpscaring or not entity or not entity.Parent then
 			return false
 		end
 		activeTween = TweenService:Create(
@@ -923,29 +989,29 @@ local function MoveRebound()
 		activeTween:Play()
 		activeTween.Completed:Wait()
 		activeTween = nil
-		return not isBanished
+		return not isBanished and not isJumpscaring
 	end
 
 	if directionType == "ExitToEntrance" then
 		for i = latestRoomVal, 1, -1 do
-			if isBanished then break end
+			if isBanished or isJumpscaring then return false end
 			if gruh:FindFirstChild(i) then
 				local room = gruh[i]
 				if room:FindFirstChild("RoomEntrance") then
 					if not MoveAlongCFrame(room.RoomEntrance.CFrame) then
-						break
+						return false
 					end
 				end
 			end
 		end
 	else
 		for i = 1, latestRoomVal + 1 do
-			if isBanished then break end
+			if isBanished or isJumpscaring then return false end
 			if gruh:FindFirstChild(i) then
 				local room = gruh[i]
 				if room:FindFirstChild("RoomExit") then
 					if not MoveAlongCFrame(room.RoomExit.CFrame) then
-						break
+						return false
 					end
 				end
 			end
@@ -956,8 +1022,8 @@ local function MoveRebound()
 		killCheckConnection:Disconnect()
 	end
 
-	if isBanished then
-		return
+	if isBanished or isJumpscaring then
+		return false
 	end
 
 	if entity and entity:IsA("BasePart") then
@@ -965,12 +1031,19 @@ local function MoveRebound()
 		entity.CanCollide = false
 	end
 	Debris:AddItem(s, 2)
+
+	if isFinalRebound then
+		completedFullCycleAndDestroyed = true
+	end
+
+	return true
 end
 
 -- ====== RUN REBOUND SEQUENCE ======
 local function RunReboundSequence()
 	isBanished = false
 	isJumpscaring = false
+	completedFullCycleAndDestroyed = false
 
 	-- 1. Âm thanh cảnh báo
 	CustomGitSound("https://github.com/Anctarus7105/Custom-Sounds/raw/main/ReboundWarning.mp3", 5, "reboundspawn")
@@ -1000,7 +1073,7 @@ local function RunReboundSequence()
 
 	-- 4. Bắt đầu di chuyển
 	if not isBanished then
-		pcall(MoveRebound)
+		pcall(MoveRebound, currentMax == 0)
 	end
 
 	while currentMax > 0 and not isBanished do
@@ -1012,8 +1085,8 @@ local function RunReboundSequence()
 		if isBanished then
 			break
 		end
-		pcall(MoveRebound)
 		currentMax = currentMax - 1
+		pcall(MoveRebound, currentMax == 0)
 	end
 
 	task.wait(5)
@@ -1036,7 +1109,13 @@ local function RunReboundSequence()
 	end)
 
 	Debris:AddItem(Warn, 7)
+	GiveReboundAchievement()
+	ReleaseReboundLock()
 end
 
 -- Kích hoạt thực thể Rebound
-RunReboundSequence()
+local okRun, errRun = pcall(RunReboundSequence)
+if not okRun then
+	ReleaseReboundLock()
+	warn("[Rebound] Lỗi thực thi:", errRun)
+end
