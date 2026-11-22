@@ -20,7 +20,7 @@ local entity = Spawner:Create({
 	Entity = {
 		Name = "Cease",
 		Asset = "https://github.com/reboundplayz/Doors-Fixed-Modes/raw/refs/heads/main/ceasebro.rbxm",
-		HeightOffset = -4
+		HeightOffset = -3
 	},
 	Lights = {
 		Flicker = {
