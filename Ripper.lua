@@ -416,7 +416,7 @@ local entity = Spawner:Create({
 	Entity = {
 		Name = "RipperBla",
 		Asset = "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/Place_131351567799504_Model_RipperMovingkkd_1791822177.txt",
-		HeightOffset = 4,
+		HeightOffset = 0,
 	},
 	Lights = {
 		Flicker = {
