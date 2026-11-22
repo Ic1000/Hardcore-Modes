@@ -766,7 +766,7 @@ local entity = Spawner:Create({
 	Entity = {
 		Name = "multimonster",
 		Asset = "rbxassetid://74103016339839",
-		HeightOffset = -3,
+		HeightOffset = -1.5,
 	},
 	Lights = {
 		Flicker = {
@@ -1042,7 +1042,7 @@ entity:SetCallback("OnStartMoving", function()
 	end)
 end)
 
-entity:SetCallback("OnDamagePlayer", function(newHealth)
+entity:SetCallback("OnKillPlayer", function()
 	if isCrucifixed then return end
 
 	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
