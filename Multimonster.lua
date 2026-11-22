@@ -766,7 +766,7 @@ local entity = Spawner:Create({
 	Entity = {
 		Name = "multimonster",
 		Asset = "rbxassetid://74103016339839",
-		HeightOffset = 0,
+		HeightOffset = -4,
 	},
 	Lights = {
 		Flicker = {
