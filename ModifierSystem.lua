@@ -335,4 +335,5 @@ end
 
 -- ====== THÊM CÁC MODIFIER TÙY Ý Ở ĐÂY ======
 AddModifierButton("Faster Trouble", "FasterTrouble")
-AddModifierButton("Modifier 2", "SecondModifier")
+AddModifierButton("Freezing Cold", "FreezingCold")
+AddModifierButton("Rebounding", "Rebounding")
