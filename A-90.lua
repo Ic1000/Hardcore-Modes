@@ -43,6 +43,27 @@ local function applyscareEffect(imageLabel, duration)
 	imageLabel.Rotation = 0
 end
 
+-- Chỉ kiểm tra Tool đang cầm trên tay (trong Character)
+local function IsHoldingCrucifix()
+	local char = player.Character
+	if not char then
+		return false
+	end
+	for _, item in ipairs(char:GetChildren()) do
+		if item:IsA("Tool") then
+			local hasTag = false
+			pcall(function()
+				hasTag = item:HasTag("Crucifix") or item:HasTag("Cruxy")
+			end)
+			local lowerName = item.Name:lower()
+			if hasTag or lowerName:find("crucifix", 1, true) or lowerName:find("cruxy", 1, true) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local angy = createImageLabel(screenGui, "128097037283645", UDim2.new(0, 400, 0, 400), UDim2.new(0.5, 0, 0.5, 0))
 angy.ImageTransparency = 1
 angy.ImageColor3 = Color3.new(1, 0, 0)
@@ -81,10 +102,22 @@ spawn(function()
 		if jsp and jsp:FindFirstChild("Jumpscare_A90") and jsp.Jumpscare_A90:FindFirstChild("FaceAngry") then
 			if jsp.Jumpscare_A90.FaceAngry.Visible == true then
 				if deb == true then
+					if screenGui and screenGui.Parent then
+						screenGui:Destroy()
+					end
 					break
 				end
 				deb = true
 				jsp.Jumpscare_A90.FaceAngry.Visible = false
+
+				-- Đang cầm thánh giá trên tay: gây 0 damage, không mất thánh giá, không ghi DeathCause
+				if IsHoldingCrucifix() then
+					if screenGui and screenGui.Parent then
+						screenGui:Destroy()
+					end
+					break
+				end
+
 				angy.ImageTransparency = 0
 
 				local ReSt = game:GetService("ReplicatedStorage") 
@@ -93,10 +126,14 @@ spawn(function()
 				end
 				task.wait(1)
 				angy.Size = UDim2.new(0, 500, 0, 500)
+
+				-- Kiểm tra lại lần nữa trước khi trừ máu cho chắc
+				local damageAmount = IsHoldingCrucifix() and 0 or 70
 				local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-				if hum then
-					hum:TakeDamage(70)
+				if hum and damageAmount > 0 then
+					hum:TakeDamage(damageAmount)
 				end
+
 				local TweenService = game:GetService("TweenService")
 				local timeInfo = TweenInfo.new(5)
 				local bye = TweenService:Create(angy, timeInfo, {ImageTransparency = 1})
