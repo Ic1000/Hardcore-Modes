@@ -5,7 +5,7 @@ local latestRoom = GameData and GameData:WaitForChild("LatestRoom", 5)
 
 local lightModel = nil
 pcall(function()
-    local assetId = "12543866876"
+    local assetId = "4398878054"
     local obj = game:GetObjects("rbxassetid://" .. assetId)
     if obj and obj[1] then 
         lightModel = obj[1] 
