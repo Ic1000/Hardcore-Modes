@@ -1,5 +1,5 @@
 -- ========================================================
---   MODIFIER GUI (AUTO-SIZE + DRAGGABLE + POPUP ADD/UNADD)
+--   MODIFIER GUI (FIXED SCROLL + DRAGGABLE + POPUP ADD/UNADD)
 -- ========================================================
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -43,7 +43,7 @@ toggleStroke.Parent = openCloseBtn
 
 -- 2. Khung chính (Danh sách Modifier - Mặc định ẩn)
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 340, 0, 0)
+mainFrame.Size = UDim2.new(0, 340, 0, 240)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 24)
@@ -76,12 +76,13 @@ divider.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
 divider.BorderSizePixel = 0
 divider.Parent = mainFrame
 
--- Khung cuộn danh sách
+-- Khung cuộn danh sách (chiếm trọn phần còn lại bên dưới divider)
 local listScroll = Instance.new("ScrollingFrame")
-listScroll.Size = UDim2.new(0.92, 0, 0, 0)
+listScroll.Size = UDim2.new(0.92, 0, 1, -64)
 listScroll.Position = UDim2.new(0.04, 0, 0, 56)
 listScroll.BackgroundTransparency = 1
 listScroll.BorderSizePixel = 0
+listScroll.ClipsDescendants = true
 listScroll.ScrollBarThickness = 4
 listScroll.ScrollBarImageColor3 = Color3.fromRGB(150, 150, 150)
 listScroll.ScrollingDirection = Enum.ScrollingDirection.Y
@@ -89,14 +90,8 @@ listScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 listScroll.Parent = mainFrame
 
-listScroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
-	local contentHeight = listScroll.AbsoluteCanvasSize.Y
-	local targetHeight = math.clamp(contentHeight + 70, 60, 320)
-	mainFrame.Size = UDim2.new(0, 340, 0, targetHeight)
-end)
-
 local uiList = Instance.new("UIListLayout")
-uiList.Padding = UDim.new(0, 10)
+uiList.Padding = UDim.new(0, 8)
 uiList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 uiList.VerticalAlignment = Enum.VerticalAlignment.Top
 uiList.SortOrder = Enum.SortOrder.LayoutOrder
@@ -318,7 +313,7 @@ local function AddModifierButton(displayName, envKeyName)
 	env[envKeyName] = env[envKeyName] or false
 
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0.96, 0, 0, 45)
+	btn.Size = UDim2.new(0.96, 0, 0, 42)
 	btn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
 	btn.Text = displayName
 	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
