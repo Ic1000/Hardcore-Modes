@@ -377,6 +377,7 @@ local function SetupLockedDoor(door)
 			local triggered = false
 
 			while door.Parent and clone.Parent do
+				-- Cửa khóa không hỗ trợ SpeedAutoPrompt (giữ khoảng cách 7 cố định & không tự fire theo tốc độ)
 				if realPrompt
 					and realPrompt.Parent
 					and realPrompt.Enabled == false
