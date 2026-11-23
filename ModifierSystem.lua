@@ -20,7 +20,7 @@ screenGui.Name = "HardcoreModifiers"
 screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 screenGui.ResetOnSpawn = false
 
--- 1. Nút Open / Close ở góc TRÁI phía trên màn hình
+-- 1. Nút Open / Close ở góc TRÁI phía trên màn hình (Mặc định "Open")
 local openCloseBtn = Instance.new("TextButton")
 openCloseBtn.Size = UDim2.new(0, 110, 0, 36)
 openCloseBtn.AnchorPoint = Vector2.new(0, 0)
@@ -41,7 +41,7 @@ toggleStroke.Color = Color3.fromRGB(80, 80, 80)
 toggleStroke.Thickness = 1.5
 toggleStroke.Parent = openCloseBtn
 
--- 2. Khung chính (Danh sách Modifier) - Tắt sẵn khi mới bật script
+-- 2. Khung chính (Danh sách Modifier - Mặc định ẩn)
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 340, 0, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -129,46 +129,6 @@ detailStroke.Color = Color3.fromRGB(100, 100, 110)
 detailStroke.Thickness = 2
 detailStroke.Parent = detailFrame
 
--- Logic ẩn/hiện bảng chính
-openCloseBtn.MouseButton1Click:Connect(function()
-	mainFrame.Visible = not mainFrame.Visible
-	openCloseBtn.Text = mainFrame.Visible and "Close" or "Open"
-	if not mainFrame.Visible then
-		detailFrame.Visible = false
-	end
-end)
-
--- Kéo thả bảng chính mượt hơn
-local dragging = false
-local dragStart = Vector2.zero
-local startPos = mainFrame.Position
-
-title.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = mainFrame.Position
-
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStart
-		mainFrame.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
-
 -- Tiêu đề tên Modifier trong bảng Popup
 local detailTitle = Instance.new("TextLabel")
 detailTitle.Size = UDim2.new(1, -50, 0, 45)
@@ -255,38 +215,78 @@ local unaddCorner = Instance.new("UICorner")
 unaddCorner.CornerRadius = UDim.new(0, 8)
 unaddCorner.Parent = unaddBtn
 
--- Quản lý danh sách modifier để chỉ cho phép bật 1 cái duy nhất
+-- Danh sách các modifier để đảm bảo chỉ bật 1 cái duy nhất
+local registeredKeys = {}
 local selectedKeyName = nil
-local registeredModifiers = {}
 
-local function SetExclusiveModifier(activeKey)
-	for _, keyName in ipairs(registeredModifiers) do
-		local shouldEnable = (keyName == activeKey)
-		env[keyName] = shouldEnable
-		_G[keyName] = shouldEnable
-	end
+local function CloseAllModifierUI()
+	detailFrame.Visible = false
+	mainFrame.Visible = false
+	openCloseBtn.Text = "Open"
 end
 
--- 1. Xử lý khi bấm nút Add to Gameplay -> bật độc quyền & tự tắt popup
-addBtn.MouseButton1Click:Connect(function()
-	if selectedKeyName then
-		SetExclusiveModifier(selectedKeyName)
-		statusLabel.Text = "Status: ACTIVE (ON)"
-		statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+-- Logic ẩn/hiện bảng chính
+openCloseBtn.MouseButton1Click:Connect(function()
+	local nextVisible = not mainFrame.Visible
+	mainFrame.Visible = nextVisible
+	if not nextVisible then
 		detailFrame.Visible = false
-		print("[Modifier] Chỉ bật duy nhất: " .. selectedKeyName)
+	end
+	openCloseBtn.Text = nextVisible and "Close" or "Open"
+end)
+
+-- Kéo thả bảng chính mượt hơn
+local dragging = false
+local dragStart = Vector2.zero
+local startPos = mainFrame.Position
+
+title.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
 	end
 end)
 
--- 2. Xử lý khi bấm nút Unadd -> tắt modifier & tự tắt popup
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+		mainFrame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-- 1. Xử lý khi bấm nút Add to Gameplay (tắt hết các modifier khác, chỉ bật cái đang chọn, rồi tự tắt UI)
+addBtn.MouseButton1Click:Connect(function()
+	if selectedKeyName then
+		for _, key in ipairs(registeredKeys) do
+			env[key] = (key == selectedKeyName)
+		end
+		statusLabel.Text = "Status: ACTIVE (ON)"
+		statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+		print("[Single Modifier] Đã bật duy nhất: " .. selectedKeyName)
+		CloseAllModifierUI()
+	end
+end)
+
+-- 2. Xử lý khi bấm nút Unadd (tắt modifier đang chọn và tự tắt UI)
 unaddBtn.MouseButton1Click:Connect(function()
 	if selectedKeyName then
 		env[selectedKeyName] = false
-		_G[selectedKeyName] = false
 		statusLabel.Text = "Status: INACTIVE (OFF)"
 		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		detailFrame.Visible = false
-		print("[Modifier] Đã tắt modifier: " .. selectedKeyName)
+		print("[Single Modifier] Đã tắt: " .. selectedKeyName)
+		CloseAllModifierUI()
 	end
 end)
 
@@ -314,9 +314,8 @@ end)
 --   4. HÀM TẠO NÚT TRONG DANH SÁCH CHÍNH
 -- ========================================================
 local function AddModifierButton(displayName, envKeyName)
-	table.insert(registeredModifiers, envKeyName)
+	table.insert(registeredKeys, envKeyName)
 	env[envKeyName] = env[envKeyName] or false
-	_G[envKeyName] = env[envKeyName]
 
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0.96, 0, 0, 45)
@@ -351,8 +350,3 @@ end
 AddModifierButton("Faster Trouble", "FasterTrouble")
 AddModifierButton("Freezing Cold", "FreezingCold")
 AddModifierButton("Rebounding", "Rebounding")
-
--- Đảm bảo UI tắt sẵn khi mới chạy script
-mainFrame.Visible = false
-detailFrame.Visible = false
-openCloseBtn.Text = "Open"
