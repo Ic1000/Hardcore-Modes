@@ -26,7 +26,7 @@ openCloseBtn.Size = UDim2.new(0, 110, 0, 36)
 openCloseBtn.AnchorPoint = Vector2.new(0, 0)
 openCloseBtn.Position = UDim2.new(0.03, 0, 0.04, 0)
 openCloseBtn.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-openCloseBtn.Text = "Close"
+openCloseBtn.Text = "Open"
 openCloseBtn.TextColor3 = Color3.fromRGB(255, 200, 50)
 openCloseBtn.TextSize = 14
 openCloseBtn.Font = Enum.Font.SourceSansBold
@@ -41,14 +41,14 @@ toggleStroke.Color = Color3.fromRGB(80, 80, 80)
 toggleStroke.Thickness = 1.5
 toggleStroke.Parent = openCloseBtn
 
--- 2. Khung chính (Danh sách Modifier)
+-- 2. Khung chính (Danh sách Modifier) - Tắt sẵn khi mới bật script
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 340, 0, 0)
 mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 24)
 mainFrame.BorderSizePixel = 0
-mainFrame.Visible = true
+mainFrame.Visible = false
 mainFrame.Parent = screenGui
 
 local mainCorner = Instance.new("UICorner")
@@ -87,7 +87,6 @@ listScroll.ScrollBarImageColor3 = Color3.fromRGB(150, 150, 150)
 listScroll.ScrollingDirection = Enum.ScrollingDirection.Y
 listScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-listScroll.AutomaticSize = Enum.AutomaticSize.Y
 listScroll.Parent = mainFrame
 
 listScroll:GetPropertyChangedSignal("AbsoluteCanvasSize"):Connect(function()
@@ -108,10 +107,35 @@ listPadding.PaddingTop = UDim.new(0, 4)
 listPadding.PaddingBottom = UDim.new(0, 8)
 listPadding.Parent = listScroll
 
+-- ========================================================
+--   3. BẢNG DETAIL POPUP (HIỆN KHI BẤM VÀO MODIFIER)
+-- ========================================================
+local detailFrame = Instance.new("Frame")
+detailFrame.Size = UDim2.new(0, 360, 0, 220)
+detailFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+detailFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+detailFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+detailFrame.BorderSizePixel = 0
+detailFrame.Visible = false
+detailFrame.ZIndex = 5
+detailFrame.Parent = screenGui
+
+local detailCorner = Instance.new("UICorner")
+detailCorner.CornerRadius = UDim.new(0, 12)
+detailCorner.Parent = detailFrame
+
+local detailStroke = Instance.new("UIStroke")
+detailStroke.Color = Color3.fromRGB(100, 100, 110)
+detailStroke.Thickness = 2
+detailStroke.Parent = detailFrame
+
 -- Logic ẩn/hiện bảng chính
 openCloseBtn.MouseButton1Click:Connect(function()
 	mainFrame.Visible = not mainFrame.Visible
 	openCloseBtn.Text = mainFrame.Visible and "Close" or "Open"
+	if not mainFrame.Visible then
+		detailFrame.Visible = false
+	end
 end)
 
 -- Kéo thả bảng chính mượt hơn
@@ -144,28 +168,6 @@ UserInputService.InputChanged:Connect(function(input)
 		)
 	end
 end)
-
--- ========================================================
---   3. BẢNG DETAIL POPUP (HIỆN KHI BẤM VÀO MODIFIER)
--- ========================================================
-local detailFrame = Instance.new("Frame")
-detailFrame.Size = UDim2.new(0, 360, 0, 220)
-detailFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-detailFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-detailFrame.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
-detailFrame.BorderSizePixel = 0
-detailFrame.Visible = false
-detailFrame.ZIndex = 5
-detailFrame.Parent = screenGui
-
-local detailCorner = Instance.new("UICorner")
-detailCorner.CornerRadius = UDim.new(0, 12)
-detailCorner.Parent = detailFrame
-
-local detailStroke = Instance.new("UIStroke")
-detailStroke.Color = Color3.fromRGB(100, 100, 110)
-detailStroke.Thickness = 2
-detailStroke.Parent = detailFrame
 
 -- Tiêu đề tên Modifier trong bảng Popup
 local detailTitle = Instance.new("TextLabel")
@@ -253,28 +255,38 @@ local unaddCorner = Instance.new("UICorner")
 unaddCorner.CornerRadius = UDim.new(0, 8)
 unaddCorner.Parent = unaddBtn
 
--- Biến lưu key đang được chọn
+-- Quản lý danh sách modifier để chỉ cho phép bật 1 cái duy nhất
 local selectedKeyName = nil
+local registeredModifiers = {}
 
--- 1. Xử lý khi bấm nút Add to Gameplay
+local function SetExclusiveModifier(activeKey)
+	for _, keyName in ipairs(registeredModifiers) do
+		local shouldEnable = (keyName == activeKey)
+		env[keyName] = shouldEnable
+		_G[keyName] = shouldEnable
+	end
+end
+
+-- 1. Xử lý khi bấm nút Add to Gameplay -> bật độc quyền & tự tắt popup
 addBtn.MouseButton1Click:Connect(function()
 	if selectedKeyName then
-		if env[selectedKeyName] == true then return end
-		env[selectedKeyName] = true
+		SetExclusiveModifier(selectedKeyName)
 		statusLabel.Text = "Status: ACTIVE (ON)"
 		statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-		print("[Anti-Spam] Đã bật modifier: " .. selectedKeyName)
+		detailFrame.Visible = false
+		print("[Modifier] Chỉ bật duy nhất: " .. selectedKeyName)
 	end
 end)
 
--- 2. Xử lý khi bấm nút Unadd
+-- 2. Xử lý khi bấm nút Unadd -> tắt modifier & tự tắt popup
 unaddBtn.MouseButton1Click:Connect(function()
 	if selectedKeyName then
-		if env[selectedKeyName] == false then return end
 		env[selectedKeyName] = false
+		_G[selectedKeyName] = false
 		statusLabel.Text = "Status: INACTIVE (OFF)"
 		statusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-		print("[Anti-Spam] Đã tắt modifier: " .. selectedKeyName)
+		detailFrame.Visible = false
+		print("[Modifier] Đã tắt modifier: " .. selectedKeyName)
 	end
 end)
 
@@ -302,7 +314,9 @@ end)
 --   4. HÀM TẠO NÚT TRONG DANH SÁCH CHÍNH
 -- ========================================================
 local function AddModifierButton(displayName, envKeyName)
+	table.insert(registeredModifiers, envKeyName)
 	env[envKeyName] = env[envKeyName] or false
+	_G[envKeyName] = env[envKeyName]
 
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(0.96, 0, 0, 45)
@@ -337,3 +351,8 @@ end
 AddModifierButton("Faster Trouble", "FasterTrouble")
 AddModifierButton("Freezing Cold", "FreezingCold")
 AddModifierButton("Rebounding", "Rebounding")
+
+-- Đảm bảo UI tắt sẵn khi mới chạy script
+mainFrame.Visible = false
+detailFrame.Visible = false
+openCloseBtn.Text = "Open"
