@@ -36,6 +36,39 @@ local currentRooms = workspace:WaitForChild("CurrentRooms")
 local hasKeyHitbox = false
 local LatestRoom = game:GetService("ReplicatedStorage"):WaitForChild("GameData"):WaitForChild("LatestRoom")
 
+local function IsLockedDoorInstance(door, parent)
+	local function scan(container)
+		if not container then return false end
+		for _, v in ipairs(container:GetDescendants()) do
+			if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
+				return true
+			end
+		end
+		return false
+	end
+	return scan(door) or scan(parent)
+end
+
+local function HasKeyItem()
+	local char = LocalPlayer.Character
+	if char then
+		for _, item in ipairs(char:GetChildren()) do
+			if item:IsA("Tool") and item.Name:lower():find("key") then
+				return true
+			end
+		end
+	end
+	local backpack = LocalPlayer:FindFirstChild("Backpack")
+	if backpack then
+		for _, item in ipairs(backpack:GetChildren()) do
+			if item:IsA("Tool") and item.Name:lower():find("key") then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 local function SetupDoorNormal(obj)
 	if obj:GetAttribute("DoorNormalScanned") then
 		return
@@ -207,7 +240,7 @@ local function SetupDoorNormal(obj)
 		local busy = false
 
 		openPrompt.PromptShown:Connect(function()
-			if not SpeedAutoPrompt or busy or not openPrompt.Enabled then
+			if not SpeedAutoPrompt or busy or not openPrompt.Enabled or HasKeyItem() then
 				return
 			end
 
@@ -377,7 +410,6 @@ local function SetupLockedDoor(door)
 			local triggered = false
 
 			while door.Parent and clone.Parent do
-				-- Cửa khóa không hỗ trợ SpeedAutoPrompt (giữ khoảng cách 7 cố định & không tự fire theo tốc độ)
 				if realPrompt
 					and realPrompt.Parent
 					and realPrompt.Enabled == false
@@ -392,8 +424,6 @@ local function SetupLockedDoor(door)
 					customPrompt.ObjectText = "Door"
 					customPrompt.MaxActivationDistance = 7
 					customPrompt.RequiresLineOfSight = false
-
-					-- FIX: prompt phải nằm trên Knob của CLONE
 					customPrompt.Parent = cloneKnob
 
 					customPrompt.Triggered:Connect(function()
@@ -594,7 +624,12 @@ local function SetupDoor(door)
 		return
 	end
 
-	if door:GetAttribute("DoorScanned") then
+	if door:GetAttribute("DoorScanned") or door:GetAttribute("LockedDoorScanned") then
+		return
+	end
+
+	if IsLockedDoorInstance(door, door.Parent) then
+		SetupLockedDoor(door)
 		return
 	end
 
@@ -608,12 +643,17 @@ local function SetupDoor(door)
 				return
 			end
 
+			if IsLockedDoorInstance(door, door.Parent) then
+				SetupLockedDoor(door)
+				return
+			end
+
 			knob = nil
 			doorHasKeyHitbox = false
 			hasMovableObjects = false
 
 			for _, v in ipairs(door:GetDescendants()) do
-				if v.Name == "KeyHitbox" then
+				if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
 					doorHasKeyHitbox = true
 				end
 
@@ -630,10 +670,9 @@ local function SetupDoor(door)
 				end
 			end
 
-			-- KeyHitbox có thể load sau Door
 			if not doorHasKeyHitbox and door.Parent then
 				for _, v in ipairs(door.Parent:GetDescendants()) do
-					if v.Name == "KeyHitbox" then
+					if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
 						doorHasKeyHitbox = true
 						break
 					end
@@ -649,8 +688,7 @@ local function SetupDoor(door)
 			return
 		end
 
-		-- Nếu KeyHitbox cuối cùng mới xuất hiện thì chuyển sang LockedDoor
-		if doorHasKeyHitbox then
+		if doorHasKeyHitbox or IsLockedDoorInstance(door, door.Parent) then
 			SetupLockedDoor(door)
 			return
 		end
@@ -705,6 +743,10 @@ local function SetupDoor(door)
 		local autoOpen = false
 
 		prompt.PromptShown:Connect(function()
+			if IsLockedDoorInstance(door, door.Parent) or HasKeyItem() then
+				return
+			end
+
 			if SpeedAutoPrompt then
 				fireproximityprompt(prompt)
 				return
