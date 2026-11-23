@@ -1,5 +1,5 @@
 -- ========================================================
---     DEER GOD - FIXED CHASE + SMOOTH HIDE PATROL SPEED
+--     DEER GOD - FIXED CHASE + FASTER TROUBLE CHASE BOOST
 -- ========================================================
 
 local Players = game:GetService("Players")
@@ -39,8 +39,12 @@ local nodeConnection = nil
 local chaseStepConnection = nil
 
 local env = (getgenv and getgenv()) or _G
-local patrolSpeed = ((env.FasterTrouble == true) or (_G.FasterTrouble == true)) and 17 or 14
-local chaseSpeed = 16
+local isFasterTrouble = (env.FasterTrouble == true) or (_G.FasterTrouble == true)
+local patrolSpeed = isFasterTrouble and 17 or 14
+
+local baseChaseSpeed = 16
+local fasterTroubleChaseMultiplier = 1.25 -- 1.25 = tăng 25% | đổi thành 1.5 nếu muốn tăng 50%
+local chaseSpeed = isFasterTrouble and (baseChaseSpeed * fasterTroubleChaseMultiplier) or baseChaseSpeed
 
 -- Tải Module CustomAchievements & Vynixu Spawner V2
 local spawner = loadstring(game:HttpGet("https://raw.githubusercontent.com/RegularVynixu/Utilities/main/Doors/Entity%20Spawner/V2/Source.lua"))()
