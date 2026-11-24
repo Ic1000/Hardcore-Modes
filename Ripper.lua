@@ -462,7 +462,7 @@ local entity = Spawner:Create({
 		Repair = false,
 	},
 	Earthquake = {
-		Enabled = false,
+		Enabled = true,
 	},
 	Spawned = {
 		ChangeColorWhenSpawn = false,
