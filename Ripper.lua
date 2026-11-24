@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local SoundService = game:GetService("SoundService")
 
 local LocalPlayer = Players.LocalPlayer
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
@@ -13,9 +14,9 @@ local LatestRoom = ReplicatedStorage:WaitForChild("GameData"):WaitForChild("Late
 
 local speed 
 if getgenv().FasterTrouble then 
-speed = 250 
+	speed = 250 
 else 
-speed = 200 
+	speed = 200 
 end
 
 local RED_COLOR = Color3.fromRGB(255, 25, 25)
@@ -142,6 +143,39 @@ local function GiveAchievement()
 	end)
 end
 
+-- Hiện mặt Jumpscare của thực thể khi ăn thánh giá
+local function ShowCrucifixFace(entityModel)
+	local model = entityModel or Workspace:FindFirstChild("RipperBla")
+	if not model then return end
+
+	for _, emitter in ipairs(model:GetDescendants()) do
+		if emitter:IsA("ParticleEmitter") and emitter.Name == "Face1" then
+			emitter.Texture = "rbxassetid://12737595583"
+			emitter.Size = NumberSequence.new(10)
+			emitter.Squash = NumberSequence.new(0)
+			emitter.TimeScale = 1
+			emitter.Enabled = true
+			emitter:Emit(20)
+			
+			local repent = GetGitSound(
+		"https://github.com/Ic1000/Misc/raw/refs/heads/main/Ripper%20Repent%20SFX.mp3",
+		"Ripper_Repent_SFX"
+	)
+	
+	if repent then
+		repent.Volume = 7
+		repent.Parent = SoundService
+		repent:Play()
+		repent.Ended:Connect(function()
+			if repent and repent.Parent then
+				repent:Destroy()
+	       		end
+       		end)
+        	end
+		end
+	end
+end
+
 -- ========================================================
 -- CƠ CHẾ PHÁ & MỞ CỬA (RunBla + ClientOpen + FadeDestroy)
 -- ========================================================
@@ -259,18 +293,18 @@ local function RunBla(entityObj)
 			task.wait(1.5)
 		end
 
--- Trong nhánh 1 (có KeyHitbox) của RunBla:
-if entityObj:IsAlive() then
-	entityObj:Pause()
-end
-FadeDestroy(model)
+		if entityObj:IsAlive() then
+			entityObj:Pause()
+		end
+		FadeDestroy(model)
 
-local char = LocalPlayer.Character
-local hum = char and char:FindFirstChildWhichIsA("Humanoid")
-if hum and hum.Health > 0 then
-	GiveAchievement()
-end
-return
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+		if hum and hum.Health > 0 then
+			GiveAchievement()
+		end
+		return
+	end
 
 	-- Nhánh 2: Phòng thường -> lấy đà húc tung cửa + ClientOpen:FireServer()
 	local snd = GetGitSound(
@@ -385,15 +419,16 @@ return
 		task.wait(2)
 	end
 
-if entityObj:IsAlive() then
-	entityObj:Pause()
-end
-FadeDestroy(model)
+	if entityObj:IsAlive() then
+		entityObj:Pause()
+	end
+	FadeDestroy(model)
 
-local char = LocalPlayer.Character
-local hum = char and char:FindFirstChildWhichIsA("Humanoid")
-if hum and hum.Health > 0 then
-	GiveAchievement()
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+	if hum and hum.Health > 0 then
+		GiveAchievement()
+	end
 end
 
 -- ========================================================
@@ -541,6 +576,15 @@ entity:SetCallback("OnSpawned", function()
 	local currentRoom = CurrentRooms:FindFirstChild(tostring(LatestRoom.Value))
 	FlashRoomRed(currentRoom, 3, 0.8)
 
+	local model = entity.Model
+	if model then
+		model:GetAttributeChangedSignal("BeingBanished"):Connect(function()
+			if model:GetAttribute("BeingBanished") then
+				ShowCrucifixFace(model)
+			end
+		end)
+	end
+
 	task.spawn(function()
 		local sound5 = Instance.new("Sound")
 		sound5.PlaybackSpeed = 1
@@ -551,6 +595,10 @@ entity:SetCallback("OnSpawned", function()
 		task.wait(7)
 		sound5:Destroy()
 	end)
+end)
+
+entity:SetCallback("OnCrucified", function()
+	ShowCrucifixFace(entity.Model)
 end)
 
 entity:SetCallback("OnEnterRoom", function(room: Model)
@@ -710,7 +758,7 @@ entity:SetCallback("OnDamagePlayer", function()
 
 			local Jumpscare = GetGitSound("https://github.com/eoyoustme/back/raw/main/Kill_with_static.mp3", "Kill")
 			if Jumpscare then
-				Jumpscare.Parent = Workspace
+				Jumpscare.Parent = SoundService 			
 				Jumpscare.Volume = 1
 				Jumpscare.PlaybackSpeed = 1
 			end
@@ -794,7 +842,7 @@ entity:SetCallback("OnDamagePlayer", function()
 			sound.SoundId = "rbxassetid://4988621968"
 			sound.Volume = 7
 			sound.PlaybackSpeed = 0.6
-			sound.Parent = Workspace
+			sound.Parent = SoundService
 			sound:Play()
 
 			if entityModel and entityModel.Parent then
