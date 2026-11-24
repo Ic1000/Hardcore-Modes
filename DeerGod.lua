@@ -43,7 +43,7 @@ local isFasterTrouble = (env.FasterTrouble == true) or (_G.FasterTrouble == true
 local patrolSpeed = isFasterTrouble and 17 or 14
 
 local baseChaseSpeed = 16
-local fasterTroubleChaseMultiplier = 1.25 -- 1.25 = tăng 25% | đổi thành 1.5 nếu muốn tăng 50%
+local fasterTroubleChaseMultiplier = 1.5 -- 1.25 = tăng 25% | đổi thành 1.5 nếu muốn tăng 50%
 local chaseSpeed = isFasterTrouble and (baseChaseSpeed * fasterTroubleChaseMultiplier) or baseChaseSpeed
 
 -- Tải Module CustomAchievements & Vynixu Spawner V2
