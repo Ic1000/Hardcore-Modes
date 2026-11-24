@@ -1,4 +1,5 @@
 local DoorData = {}
+local ignoredDoors = {}
 local SpeedAutoPrompt = false
 
 local function GetModifierState()
@@ -18,10 +19,14 @@ end
 local function GetGitSound(GithubSnd, SoundName, parent)
 	local url = GithubSnd
 	if not isfile(SoundName .. ".mp3") then
-		writefile(SoundName .. ".mp3", game:HttpGet(url))
+		pcall(function()
+			writefile(SoundName .. ".mp3", game:HttpGet(url))
+		end)
 	end
 	local sound = Instance.new("Sound")
-	sound.SoundId = (getcustomasset or getsynasset)(SoundName .. ".mp3")
+	pcall(function()
+		sound.SoundId = (getcustomasset or getsynasset)(SoundName .. ".mp3")
+	end)
 	sound.Parent = parent
 	return sound
 end
@@ -35,39 +40,6 @@ local LocalPlayer = Players.LocalPlayer
 local currentRooms = workspace:WaitForChild("CurrentRooms")
 local hasKeyHitbox = false
 local LatestRoom = game:GetService("ReplicatedStorage"):WaitForChild("GameData"):WaitForChild("LatestRoom")
-
-local function IsLockedDoorInstance(door, parent)
-	local function scan(container)
-		if not container then return false end
-		for _, v in ipairs(container:GetDescendants()) do
-			if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
-				return true
-			end
-		end
-		return false
-	end
-	return scan(door) or scan(parent)
-end
-
-local function HasKeyItem()
-	local char = LocalPlayer.Character
-	if char then
-		for _, item in ipairs(char:GetChildren()) do
-			if item:IsA("Tool") and item.Name:lower():find("key") then
-				return true
-			end
-		end
-	end
-	local backpack = LocalPlayer:FindFirstChild("Backpack")
-	if backpack then
-		for _, item in ipairs(backpack:GetChildren()) do
-			if item:IsA("Tool") and item.Name:lower():find("key") then
-				return true
-			end
-		end
-	end
-	return false
-end
 
 local function SetupDoorNormal(obj)
 	if obj:GetAttribute("DoorNormalScanned") then
@@ -191,7 +163,8 @@ local function SetupDoorNormal(obj)
 			openPrompt.Enabled = false
 			closePrompt.Enabled = true
 
-			if openSound and openSound:IsA("Sound") and not SpeedAutoPrompt then
+			local mod = GetModifierState()
+			if openSound and openSound:IsA("Sound") and not SpeedAutoPrompt and not mod.FasterTrouble then
 				openSound:Play()
 			end
 
@@ -240,7 +213,7 @@ local function SetupDoorNormal(obj)
 		local busy = false
 
 		openPrompt.PromptShown:Connect(function()
-			if not SpeedAutoPrompt or busy or not openPrompt.Enabled or HasKeyItem() then
+			if not SpeedAutoPrompt or busy or not openPrompt.Enabled then
 				return
 			end
 
@@ -424,6 +397,8 @@ local function SetupLockedDoor(door)
 					customPrompt.ObjectText = "Door"
 					customPrompt.MaxActivationDistance = 7
 					customPrompt.RequiresLineOfSight = false
+
+					-- FIX: prompt phải nằm trên Knob của CLONE
 					customPrompt.Parent = cloneKnob
 
 					customPrompt.Triggered:Connect(function()
@@ -452,7 +427,6 @@ local function SetupLockedDoor(door)
 						local hum = char:WaitForChild("Humanoid")
 						local hrp = char:WaitForChild("HumanoidRootPart")
 
-						local mod = GetModifierState()
 						local oldCF = cloneDoor.CFrame
 
 						local function GetOpenCF()
@@ -490,6 +464,7 @@ local function SetupLockedDoor(door)
 							end
 						end
 
+						local mod = GetModifierState()
 						if mod.FasterTrouble then
 							if openSound then
 								openSound:Play()
@@ -624,12 +599,7 @@ local function SetupDoor(door)
 		return
 	end
 
-	if door:GetAttribute("DoorScanned") or door:GetAttribute("LockedDoorScanned") then
-		return
-	end
-
-	if IsLockedDoorInstance(door, door.Parent) then
-		SetupLockedDoor(door)
+	if door:GetAttribute("DoorScanned") then
 		return
 	end
 
@@ -637,14 +607,10 @@ local function SetupDoor(door)
 		local knob
 		local doorHasKeyHitbox = false
 		local hasMovableObjects = false
+		local waited = 0
 
 		repeat
 			if not door.Parent then
-				return
-			end
-
-			if IsLockedDoorInstance(door, door.Parent) then
-				SetupLockedDoor(door)
 				return
 			end
 
@@ -653,7 +619,7 @@ local function SetupDoor(door)
 			hasMovableObjects = false
 
 			for _, v in ipairs(door:GetDescendants()) do
-				if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
+				if v.Name == "KeyHitbox" then
 					doorHasKeyHitbox = true
 				end
 
@@ -670,25 +636,28 @@ local function SetupDoor(door)
 				end
 			end
 
+			-- KeyHitbox có thể load sau Door
 			if not doorHasKeyHitbox and door.Parent then
 				for _, v in ipairs(door.Parent:GetDescendants()) do
-					if v.Name == "KeyHitbox" or v.Name == "Lock" or (v:IsA("ProximityPrompt") and v.Name == "UnlockPrompt") then
+					if v.Name == "KeyHitbox" then
 						doorHasKeyHitbox = true
 						break
 					end
 				end
 			end
 
-			if not knob or not hasMovableObjects then
-				task.wait()
+			if not knob or (not hasMovableObjects and waited < 2) then
+				task.wait(0.05)
+				waited += 0.05
 			end
-		until knob and hasMovableObjects
+		until knob and (hasMovableObjects or waited >= 2)
 
-		if not door.Parent then
+		if not door.Parent or not knob then
 			return
 		end
 
-		if doorHasKeyHitbox or IsLockedDoorInstance(door, door.Parent) then
+		-- Nếu KeyHitbox cuối cùng mới xuất hiện thì chuyển sang LockedDoor
+		if doorHasKeyHitbox then
 			SetupLockedDoor(door)
 			return
 		end
@@ -723,12 +692,6 @@ local function SetupDoor(door)
 			end
 		end
 
-		if #moved == 0 then
-			DoorData[door] = nil
-			door:SetAttribute("DoorScanned", nil)
-			return
-		end
-
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Style = Enum.ProximityPromptStyle.Custom
 		prompt.ActionText = "Open Door"
@@ -743,11 +706,12 @@ local function SetupDoor(door)
 		local autoOpen = false
 
 		prompt.PromptShown:Connect(function()
-			if IsLockedDoorInstance(door, door.Parent) or HasKeyItem() then
-				return
-			end
-
 			if SpeedAutoPrompt then
+				for _, info in ipairs(moved) do
+					if info.Object and info.Parent then
+						info.Object.Parent = info.Parent
+					end
+				end
 				fireproximityprompt(prompt)
 				return
 			end
@@ -950,8 +914,7 @@ local function SetupWardrobe(wardrobe)
 
 		wardrobe:SetAttribute("WardrobeScanned", true)
 
-		local instantWardrobe = GetModifierState().InstantWardrobe
-		local holdTime = instantWardrobe and 0 or 0.25
+		local holdTime = GetModifierState().InstantWardrobe and 0 or 0.25
 
 		oldPrompt.ActionText = "Njkx"
 		oldPrompt.Enabled = false
