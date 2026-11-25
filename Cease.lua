@@ -1,7 +1,7 @@
 getgenv().OgHungerNewSpawner = nil
 
 local success, Spawner = pcall(function()
-	return loadstring(game:HttpGet("https://raw.githubusercontent.com/eoyoustme/Mayhem-Remake/refs/heads/main/OgHungerNewSpawner"))()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/Ic1000/Misc/refs/heads/main/Oghungerspawner"))()
 end)
 
 if not success or not Spawner then
@@ -151,23 +151,17 @@ local function changeLightColors()
 		end
 	end
 end
-
-local crucifixEffectPlayed = false
-
-local function TriggerCrucifiedEffect(entityModel)
-	if crucifixEffectPlayed then return end
-	crucifixEffectPlayed = true
-
+---====== CLEAN CALLBACKS ======---
+entity:SetCallback("OnCrucified", function(entityModel)
 	local model = entityModel or (entity and entity.Model) or workspace:FindFirstChild("Cease")
-	local playedSound = false
-
-	if model then
+	
+		if model then
 		local repentSound = model:FindFirstChild("Repent", true)
 		if repentSound and repentSound:IsA("Sound") then
 			pcall(function()
 				repentSound.Parent = SoundService
 				repentSound:Play()
-				playedSound = true
+				
 				repentSound.Ended:Connect(function()
 					if repentSound and repentSound.Parent then
 						repentSound:Destroy()
@@ -176,32 +170,10 @@ local function TriggerCrucifiedEffect(entityModel)
 			end)
 		end
 	end
-
-	if not playedSound then
-		local fallback = SoundService:FindFirstChild("Repent", true) or workspace:FindFirstChild("Repent", true)
-		if fallback and fallback:IsA("Sound") then
-			pcall(function() fallback:Play() end)
-		end
-	end
-end
-
----====== CLEAN CALLBACKS ======---
-
-entity:SetCallback("OnCrucified", function(entityModel)
-	TriggerCrucifiedEffect(entityModel or entity.Model)
 end)
 
 entity:SetCallback("OnSpawned", function()
 	changeLightColors()
-
-	local model = entity.Model or workspace:FindFirstChild("Cease")
-	if model then
-		model:GetAttributeChangedSignal("BeingBanished"):Connect(function()
-			if model:GetAttribute("BeingBanished") then
-				entity:RunCallback("OnCrucified", model)
-			end
-		end)
-	end
 
 	task.spawn(function()
 		local entityModel = workspace:WaitForChild("Cease", 5)
