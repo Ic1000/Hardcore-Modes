@@ -9,6 +9,16 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
+if _G.SprintSystem then
+	warn("is executed, nah")
+pcall(function()
+        local mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
+        mainGame.caption("Is Executed, Returning...", true)
+    end)
+return
+end
+_G.SprintSystem = true
+
 -- Lấy RemotesFolder chuẩn của Doors
 local remotesFolder = ReplicatedStorage:FindFirstChild("EntityInfo") or ReplicatedStorage:FindFirstChild("Bricks") or ReplicatedStorage:FindFirstChild("RemotesFolder")
 
