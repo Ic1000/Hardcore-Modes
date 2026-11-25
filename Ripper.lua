@@ -829,13 +829,6 @@ entity:SetCallback("OnDamagePlayer", function()
 				ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = "Ripper"
 			end)
 
-			local sound = Instance.new("Sound")
-			sound.SoundId = "rbxassetid://4988621968"
-			sound.Volume = 7
-			sound.PlaybackSpeed = 0.6
-			sound.Parent = SoundService
-			sound:Play()
-
 			if entityModel and entityModel.Parent then
 				entityModel:Destroy()
 			end
