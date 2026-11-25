@@ -436,7 +436,7 @@ end
 -- ========================================================
 getgenv().OgHungerNewSpawner = nil
 local success, Spawner = pcall(function()
-	return loadstring(game:HttpGet("https://raw.githubusercontent.com/eoyoustme/Mayhem-Remake/refs/heads/main/OgHungerNewSpawner"))()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/Ic1000/Misc/refs/heads/main/Oghungerspawner"))()
 end)
 
 if not success or not Spawner then
@@ -542,7 +542,7 @@ local entity = Spawner:Create({
 			ParticleName = "ParticleEmitter",
 			ParticleTexture = "rbxassetid://12737595583",
 			SoundUrl = "https://github.com/eoyoustme/back/raw/main/Kill_with_static.mp3",
-			SlamSoundId = "rbxassetid://0",
+			SlamSoundId = "https://github.com/Ic1000/Misc/raw/refs/heads/main/RipperJumpscareSlam.mp3",
 			EndSoundId = "rbxassetid://4988621968",
 			Images = {
 				"rbxassetid://8482795900",
@@ -575,15 +575,6 @@ if not entity then return end
 entity:SetCallback("OnSpawned", function()
 	local currentRoom = CurrentRooms:FindFirstChild(tostring(LatestRoom.Value))
 	FlashRoomRed(currentRoom, 3, 0.8)
-
-	local model = entity.Model
-	if model then
-		model:GetAttributeChangedSignal("BeingBanished"):Connect(function()
-			if model:GetAttribute("BeingBanished") then
-				ShowCrucifixFace(model)
-			end
-		end)
-	end
 
 	task.spawn(function()
 		local sound5 = Instance.new("Sound")
