@@ -27,6 +27,8 @@ local isCrucifixed = false
 local destroyedsounds = false
 local activeBreakingSound = nil
 local activeSpawnedModel = nil
+local character = LocalPlayer.Character
+local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
 
 local speed
 if getgenv().FasterTrouble then
@@ -103,6 +105,56 @@ local function AttachFinishCleanup(soundObj: Sound)
 		end)
 	end
 end
+
+local activeBreakSounds = {}
+
+local function StopAllBreakingSounds()
+	if activeBreakingSound then
+		pcall(function()
+			activeBreakingSound.Looped = false
+			activeBreakingSound:Stop()
+			activeBreakingSound:Destroy()
+		end)
+		activeBreakingSound = nil
+	end
+
+	for _, s in ipairs({ doorSound1, doorSound2 }) do
+		if s then
+			pcall(function()
+				s.Looped = false
+				s:Stop()
+				s.TimePosition = 0
+			end)
+		end
+	end
+
+	for i = #activeBreakSounds, 1, -1 do
+		local snd = activeBreakSounds[i]
+		pcall(function()
+			if snd then
+				snd.Looped = false
+				snd:Stop()
+				snd:Destroy()
+			end
+		end)
+		table.remove(activeBreakSounds, i)
+	end
+end
+
+local function HookDeathSoundStop(char)
+    if not char then return end
+    local hum = char:WaitForChild("Humanoid", 5)
+    if hum then
+        hum.Died:Connect(function()
+            StopAllBreakingSounds()
+        end)
+    end
+end
+
+if LocalPlayer.Character then
+    HookDeathSoundStop(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(HookDeathSoundStop)
 
 local function LetPlayingSoundsFinish(targetModel)
 	if activeBreakingSound and activeBreakingSound.Parent then
@@ -333,7 +385,8 @@ local function BreakRoom(room)
 
 	task.spawn(function()
 		task.wait(0.02)
-		if isCrucifixed then return end
+		local curHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if isCrucifixed or (curHum and curHum.Health <= 0) then return end
 
 		local assetContainer = room:FindFirstChild("Assets") or room
 
@@ -361,6 +414,8 @@ local function BreakRoom(room)
 		breakSound.Ended:Connect(function()
 			breakSound:Destroy()
 		end)
+		
+		table.insert(activeBreakSounds, breakSound)
 
 		local targets = {}
 		for _, v in ipairs(room:GetDescendants()) do
@@ -409,304 +464,8 @@ local function TriggerExtremeShake()
 end
 
 -- ========================================================
---            FULL CRUCIFIX EFFECT (REPENTANCE)             --
+--            FULL CRUCIFIX EFFECT (Now Use Function)             --
 -- ========================================================
-local function PlayFullCrucifixEffect(entityObj)
-	local model = entityObj and entityObj.Model or activeSpawnedModel or Workspace:FindFirstChild("multimonster")
-	if not model or not model.Parent then return end
-
-	isCrucifixed = true
-	model:SetAttribute("BeingBanished", true)
-	model:SetAttribute("Paused", true)
-	model:SetAttribute("Damage", false)
-	LetPlayingSoundsFinish(model)
-
-	pcall(function()
-		local char = LocalPlayer.Character
-		local tool = char and (char:FindFirstChild("Crucifix") or char:FindFirstChild("Cruxy"))
-		if tool and tool:IsA("Tool") then
-			tool:Destroy()
-		end
-	end)
-
-	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-	local entityPivot = model:GetPivot()
-
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = { character, model }
-
-	local result = Workspace:Raycast(entityPivot.Position, Vector3.new(0, -1000, 0), params)
-	local groundPos = result and result.Position or (entityPivot.Position - Vector3.new(0, 4, 0))
-
-	local repentanceAsset
-	pcall(function()
-		repentanceAsset = LoadCustomInstance("https://github.com/RegularVynixu/DOORS-Entity-Spawner-V2/raw/main/Assets/Repentance.rbxm")
-	end)
-
-	local camShaker
-	pcall(function()
-		local camShakerMod = ReplicatedStorage:FindFirstChild("CameraShaker", true)
-		if camShakerMod then
-			local CameraShaker = require(camShakerMod)
-			camShaker = CameraShaker.new(Enum.RenderPriority.Camera.Value, function(shakeCf)
-				local curCam = Workspace.CurrentCamera
-				if curCam then curCam.CFrame = curCam.CFrame * shakeCf end
-			end)
-			camShaker:Start()
-			camShaker:ShakeOnce(5, 20, 2, Vector3.zero)
-		end
-	end)
-
-	if not repentanceAsset then
-		if model and model.Parent then model:Destroy() end
-		return
-	end
-
-	local Repentance = repentanceAsset:Clone()
-	local Crucifix = Repentance:FindFirstChild("Crucifix")
-	local Handle = Crucifix and Crucifix:FindFirstChild("Handle")
-	local Pentagram = Repentance:FindFirstChild("Pentagram")
-	local EntityPart = Repentance:FindFirstChild("Entity")
-	local Sound = Handle and Handle:FindFirstChild("Sound")
-
-	Repentance:PivotTo(CFrame.new(groundPos))
-	if Crucifix then
-		Crucifix:PivotTo(character:GetPivot())
-	end
-	if EntityPart then
-		EntityPart.CFrame = entityPivot
-	end
-	Repentance.Parent = Workspace
-
-	if Sound and Sound:IsA("Sound") then
-		Sound:Play()
-	end
-
-	local function waitUntil(t: number)
-		if not Sound or not Sound.IsPlaying then
-			task.wait(math.min(t, 2))
-			return
-		end
-		local guard = tick()
-		repeat
-			RunService.RenderStepped:Wait()
-		until not Sound.Parent or not Sound.IsPlaying or Sound.TimePosition >= t or (tick() - guard) > 15
-	end
-
-	local function fadeOut()
-		if not Pentagram then return end
-		for _, v in ipairs(Pentagram:GetChildren()) do
-			if v.Name == "BeamFlat" then
-				task.delay(v:GetAttribute("Delay") or 0, function()
-					if v and v.Parent then
-						pcall(function()
-							TweenService:Create(
-								v,
-								TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-								{ Brightness = 0 }
-							):Play()
-						end)
-					end
-				end)
-			elseif v.Name == "BeamChain" then
-				pcall(function()
-					TweenService:Create(
-						v,
-						TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
-						{ Brightness = 0 }
-					):Play()
-				end)
-			end
-		end
-	end
-
-	local crucifixColor = Color3.fromRGB(255, 227, 137)
-	for _, v in ipairs(Repentance:GetDescendants()) do
-		if v:HasTag("GiveMeColor") then
-			if v:IsA("Light") or v:IsA("BasePart") then
-				v.Color = crucifixColor
-			elseif v:IsA("ParticleEmitter") or v:IsA("Beam") then
-				v.Color = ColorSequence.new({
-					ColorSequenceKeypoint.new(0, crucifixColor),
-					ColorSequenceKeypoint.new(1, crucifixColor),
-				})
-			end
-		end
-	end
-
-	task.spawn(function()
-		while EntityPart and EntityPart.Parent and model and model.Parent do
-			model:PivotTo(EntityPart.CFrame)
-			RunService.RenderStepped:Wait()
-		end
-		if model and model.Parent then
-			model:Destroy()
-		end
-	end)
-
-	if Pentagram and Pentagram:FindFirstChild("Circle") then
-		local circle = Pentagram.Circle
-		TweenService:Create(
-			circle,
-			TweenInfo.new(2, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
-			{ CFrame = circle.CFrame - Vector3.new(0, 25, 0) }
-		):Play()
-		task.delay(2, function()
-			if circle and circle.Parent then circle:Destroy() end
-		end)
-	end
-
-	if Handle then
-		local bodyPos = Handle:FindFirstChild("BodyPosition")
-		if bodyPos then
-			bodyPos.Position = (character:GetPivot() * CFrame.new(1, 4, -6)).Position
-		end
-
-		local bodyAngVel = Handle:FindFirstChild("BodyAngularVelocity")
-		if bodyAngVel then
-			TweenService:Create(
-				bodyAngVel,
-				TweenInfo.new(4, Enum.EasingStyle.Cubic, Enum.EasingDirection.In),
-				{ AngularVelocity = Vector3.new(0, 40, 0) }
-			):Play()
-		end
-
-		task.delay(3, function()
-			local shards = Handle:FindFirstChild("Shards")
-			if shards then
-				for _, shard in ipairs(shards:GetChildren()) do
-					pcall(function()
-						shard.CollisionGroup = "NoPlayer"
-						shard.CanCollide = true
-						if shard:FindFirstChild("Weld") then shard.Weld:Destroy() end
-						shard.AssemblyAngularVelocity = Vector3.zero
-					end)
-				end
-			end
-		end)
-	end
-
-	if EntityPart then
-		TweenService:Create(
-			EntityPart,
-			TweenInfo.new(3, Enum.EasingStyle.Elastic, Enum.EasingDirection.In),
-			{ CFrame = EntityPart.CFrame + Vector3.new(0, 2, 0) }
-		):Play()
-	end
-
-	task.spawn(function()
-		waitUntil(2.625)
-
-		local pentLight = Pentagram and Pentagram:FindFirstChild("Base")
-			and Pentagram.Base:FindFirstChild("LightAttach")
-			and Pentagram.Base.LightAttach:FindFirstChild("LightBright")
-		local handleLight = Handle and Handle:FindFirstChild("Light")
-
-		if pentLight then
-			TweenService:Create(pentLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
-				Brightness = 5,
-				Range = 40,
-			}):Play()
-		end
-		if handleLight then
-			TweenService:Create(handleLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
-				Brightness = 11.25,
-				Range = 30,
-			}):Play()
-		end
-
-		task.wait(1.5)
-
-		if pentLight then
-			TweenService:Create(pentLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
-				Brightness = 0,
-				Range = 0,
-			}):Play()
-		end
-		if handleLight then
-			TweenService:Create(handleLight, TweenInfo.new(1.5, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
-				Brightness = 0,
-				Range = 0,
-			}):Play()
-		end
-
-		if handleLight then
-			TweenService:Create(handleLight, TweenInfo.new(1, Enum.EasingStyle.Circular, Enum.EasingDirection.InOut), {
-				Brightness = 15,
-				Range = 40,
-			}):Play()
-		end
-
-		if camShaker and camShaker.StartFadeOut then
-			pcall(function() camShaker:StartFadeOut(3) end)
-		end
-		fadeOut()
-
-		local bodyAngVel = Handle and Handle:FindFirstChild("BodyAngularVelocity")
-		if bodyAngVel then
-			TweenService:Create(
-				bodyAngVel,
-				TweenInfo.new(3, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out),
-				{ AngularVelocity = Vector3.zero }
-			):Play()
-		end
-	end)
-
-	waitUntil(2.5)
-
-	if EntityPart then
-		TweenService:Create(
-			EntityPart,
-			TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-			{ CFrame = EntityPart.CFrame - Vector3.new(0, 50, 0) }
-		):Play()
-	end
-
-	for _, s in ipairs(model:GetDescendants()) do
-		if s:IsA("Sound") and not s:GetAttribute("VolumeIgnore") then
-			TweenService:Create(
-				s,
-				TweenInfo.new(3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
-				{ Volume = 0 }
-			):Play()
-		end
-	end
-
-	waitUntil(6.75)
-
-	if Handle and Handle:FindFirstChild("Glow") then
-		TweenService:Create(Handle.Glow, TweenInfo.new(1), {
-			Size = Handle.Glow.Size * 3,
-			Transparency = 1,
-		}):Play()
-	end
-
-	local pentLight = Pentagram and Pentagram:FindFirstChild("Base")
-		and Pentagram.Base:FindFirstChild("LightAttach")
-		and Pentagram.Base.LightAttach:FindFirstChild("LightBright")
-	local handleLight = Handle and Handle:FindFirstChild("Light")
-
-	if pentLight then
-		TweenService:Create(pentLight, TweenInfo.new(1), { Brightness = 0, Range = 0 }):Play()
-	end
-	if handleLight then
-		TweenService:Create(handleLight, TweenInfo.new(1), { Brightness = 0, Range = 0 }):Play()
-	end
-
-	if Handle and Handle:FindFirstChild("ExplodeParticle") then
-		Handle.ExplodeParticle:Emit(math.random(20, 30))
-	end
-	if camShaker and camShaker.ShakeOnce then
-		pcall(function() camShaker:ShakeOnce(7.5, 7.5, 0.25, 1.5) end)
-	end
-
-	task.delay(5, function()
-		if Repentance and Repentance.Parent then
-			Repentance:Destroy()
-		end
-	end)
-end
 
 -- ========================================================
 --               CHECK ĐIỀU KIỆN XUẤT HIỆN                  --
@@ -754,7 +513,7 @@ end
 -- ========================================================
 getgenv().OgHungerNewSpawner = nil
 local success, Spawner = pcall(function()
-	return loadstring(game:HttpGet("https://raw.githubusercontent.com/eoyoustme/Mayhem-Remake/refs/heads/main/OgHungerNewSpawner"))()
+	return loadstring(game:HttpGet("https://raw.githubusercontent.com/Ic1000/Misc/refs/heads/main/Oghungerspawner"))()
 end)
 
 if not success or not Spawner then
@@ -869,7 +628,7 @@ local entity = Spawner:Create({
 		},
 	},
 	Crucifixion = {
-		Type = "Guiding",
+		Type = "Curious",
 		Enabled = true,
 		Range = 60,
 		Resist = false,
@@ -892,8 +651,18 @@ if not entity then return end
 -- ========================================================
 --                      CALLBACKS                         --
 -- ========================================================
-entity:SetCallback("CrucifixionOverwrite", function()
-	PlayFullCrucifixEffect(entity)
+entity:SetCallback("OnCrucified", function()
+isCrucifixed = true
+LetPlayingSoundsFinish(activeSpawnedModel)
+local womp = entity.Model or Workspace:WaitForChild("multimonster", 2)
+
+pcall(function()
+			for _, v in pairs(womp:GetDescendants()) do
+				if v:IsA("Sound") and v.IsPlaying then
+					v:Stop()
+				end
+			end
+		end)
 end)
 
 entity:SetCallback("OnSpawned", function()
@@ -958,8 +727,9 @@ entity:SetCallback("OnStartMoving", function()
 	print("multimonster has started moving")
 
 	task.spawn(function()
-		if isCrucifixed then return end
-
+		local curHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if isCrucifixed or (curHum and curHum.Health <= 0) then return end
+		
 		local urls = {
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripbreak2.mp3", "ripbreak2" },
 			{ "https://github.com/Ic1000/Misc/raw/refs/heads/main/ripperbreak3.mp3", "ripbreak3" },
@@ -977,12 +747,13 @@ entity:SetCallback("OnStartMoving", function()
 		breaking.Volume = 0
 		activeBreakingSound = breaking
 
-		pcall(function()
-			if not isCrucifixed then
+				pcall(function()
+			local curHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if not isCrucifixed and not (curHum and curHum.Health <= 0) then
 				breaking:Play()
 			end
 		end)
-
+		
 		local conn
 		conn = RunService.Heartbeat:Connect(function()
 			local character = LocalPlayer.Character
@@ -1005,7 +776,7 @@ entity:SetCallback("OnStartMoving", function()
 				return
 			end
 
-			if isCrucifixed then
+			if isCrucifixed or not hrp or hrp.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
 				breaking.Looped = false
 				if conn then
 					conn:Disconnect()
@@ -1055,6 +826,7 @@ entity:SetCallback("OnKillPlayer", function()
 	if not wompwomp then return end
 
 	if not character:GetAttribute("Hiding") and not debounce then
+	StopAllBreakingSounds()
 		debounce = true
 		isJumpscaring = true
 
@@ -1181,10 +953,11 @@ end)
 entity:SetCallback("OnEnterRoom", function(room, firstTime)
 	if isCrucifixed or not room then return end
 	BreakRoom(room)
-	if not isCrucifixed then
+	
+		local curHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if isCrucifixed or (curHum and curHum.Health <= 0) then return end
 		doorSound1:Play()
 		doorSound2:Play()
-	end
 end)
 
 entity:SetCallback("OnDespawned", function()
