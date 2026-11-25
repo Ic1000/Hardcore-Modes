@@ -699,6 +699,14 @@ entity:SetCallback("OnDamagePlayer", function()
 
 			local controlsModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
 			controlsModule:Disable()
+			
+			local JumpscareSound= GetGitSound("https://github.com/Ic1000/Misc/raw/refs/heads/main/RipperJumpscareSlam.mp3", "Ripper_Slam_SFX")
+			if JumpscareSound then
+				JumpscareSound.Parent = SoundService 			
+				JumpscareSound.Volume = 7
+				JumpscareSound.PlaybackSpeed = 1
+          JumpscareSound:Play()
+			end
 
 			local function SetAllParticlesTimeScale(m, timescale)
 				for _, descendant in ipairs(m:GetDescendants()) do
@@ -727,7 +735,7 @@ entity:SetCallback("OnDamagePlayer", function()
 			camera.CameraType = Enum.CameraType.Scriptable
 			local startCFrame = camera.CFrame
 			local lerpAlpha = 0
-			local lerpSpeed = 4
+			local lerpSpeed = 10
 
 			local lockConnection
 			lockConnection = RunService.RenderStepped:Connect(function(dt)
@@ -821,6 +829,13 @@ entity:SetCallback("OnDamagePlayer", function()
 				if Img then Img.ImageTransparency = 1 end
 			end
 			Alpha:Destroy()
+			
+			local sound = Instance.new("Sound")
+		sound.SoundId = "rbxassetid://4988621968"
+		sound.Volume = 7
+		sound.PlaybackSpeed = 0.6
+		sound.Parent = SoundService
+		sound:Play()
 
 			task.wait()
 			if hum then hum.Health = 0 end
