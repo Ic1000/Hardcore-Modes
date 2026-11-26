@@ -323,56 +323,171 @@ local VITAMIN_SOUND_IDS = {
 	["rbxassetid://9121005783"] = true,  -- sound_close
 }
 
+local VITAMIN_OPEN_ANIM_IDS = {
+	["rbxassetid://1048256314"] = true,
+	["1048256314"] = true,
+}
+
 local vitaminsCooldown = false
 local vitaminsAddedConn = nil
+local vitaminsRemovedConn = nil
 local vitaminsActConn = nil
-local vitaminSoundConns = {}
+local vitaminAnimConn = nil
+local vitaminDetailConns = {}
 
-local function ClearVitaminSoundConns()
-	for _, conn in ipairs(vitaminSoundConns) do
+local function ApplyVitaminEffect(char)
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then return end
+	if vitaminsCooldown then return end
+
+	vitaminsCooldown = true
+	hum.Health = math.min(hum.Health + 30, hum.MaxHealth)
+
+	stamina = CONFIG.maxstamina
+	isExhausted = false
+	vitaminBuffEndTime = os.clock() + VITAMIN_BUFF_DURATION
+
+	if soundExhausted.IsPlaying then
+		soundExhausted:Stop()
+	end
+	if staminaBar then
+		staminaBar.Size = UDim2.new(1, 0, 1, 0)
+	end
+	if character then
+		character:SetAttribute("SpeedBoost", GetActiveBoost())
+	end
+	RefreshSprintButtonVisual()
+	ShowCaption("Vitamin boost active!")
+
+	-- Cooldown ngắn 1.5s để tránh 1 lần uống kích hoạt đúp nhiều hook (sound + anim + stack),
+	-- nhưng vẫn đủ nhanh để uống liên tiếp nhiều viên
+	task.delay(1.5, function()
+		vitaminsCooldown = false
+	end)
+end
+
+local function ClearVitaminHooks()
+	if vitaminsActConn then
+		vitaminsActConn:Disconnect()
+		vitaminsActConn = nil
+	end
+	if vitaminAnimConn then
+		vitaminAnimConn:Disconnect()
+		vitaminAnimConn = nil
+	end
+	for _, conn in ipairs(vitaminDetailConns) do
 		pcall(function()
 			conn:Disconnect()
 		end)
 	end
-	table.clear(vitaminSoundConns)
+	table.clear(vitaminDetailConns)
 end
 
-local function HookVitaminSounds(tool)
-	ClearVitaminSoundConns()
+local function IsVitaminTool(obj)
+	return obj and obj:IsA("Tool") and obj.Name:lower():find("vitamin", 1, true) ~= nil
+end
 
-	local function watchSound(obj)
-		if obj:IsA("Sound") and VITAMIN_SOUND_IDS[obj.SoundId] then
-			local conn = obj.Played:Connect(function()
-				local hum = character and character:FindFirstChildOfClass("Humanoid")
-				if hum and hum.Health > 0 then
-					ApplyVitaminEffect(character)
+local function AttachToVitaminTool(char, tool)
+	if not IsVitaminTool(tool) then return end
+	ClearVitaminHooks()
+
+	-- 1. Theo dõi giảm số viên qua Attribute của Tool (Durability / Uses / Amount / Count / Stack...)
+	local attrCache = {}
+	for attrName, attrVal in pairs(tool:GetAttributes()) do
+		if type(attrVal) == "number" then
+			attrCache[attrName] = attrVal
+		end
+	end
+
+	table.insert(vitaminDetailConns, tool.AttributeChanged:Connect(function(attrName)
+		local newVal = tool:GetAttribute(attrName)
+		if type(newVal) == "number" then
+			local oldVal = attrCache[attrName]
+			attrCache[attrName] = newVal
+			if oldVal and newVal < oldVal then
+				ApplyVitaminEffect(char)
+			end
+		end
+	end))
+
+	-- 2. Theo dõi giảm số viên qua IntValue / NumberValue / TextLabel bên trong Tool
+	local function watchDescendant(desc)
+		if desc:IsA("IntValue") or desc:IsA("NumberValue") then
+			local lastVal = desc.Value
+			table.insert(vitaminDetailConns, desc.Changed:Connect(function(newVal)
+				if newVal < lastVal then
+					ApplyVitaminEffect(char)
 				end
-			end)
-			table.insert(vitaminSoundConns, conn)
+				lastVal = newVal
+			end))
+		elseif desc:IsA("TextLabel") then
+			local lastNum = tonumber(desc.Text:match("%d+"))
+			table.insert(vitaminDetailConns, desc:GetPropertyChangedSignal("Text"):Connect(function()
+				local newNum = tonumber(desc.Text:match("%d+"))
+				if lastNum and newNum and newNum < lastNum then
+					ApplyVitaminEffect(char)
+				end
+				lastNum = newNum
+			end))
+		elseif desc:IsA("Sound") and VITAMIN_SOUND_IDS[desc.SoundId] then
+			table.insert(vitaminDetailConns, desc.Played:Connect(function()
+				if tool and tool.Parent == char then
+					ApplyVitaminEffect(char)
+				end
+			end))
 		end
 	end
 
 	for _, desc in ipairs(tool:GetDescendants()) do
-		watchSound(desc)
+		watchDescendant(desc)
+	end
+	table.insert(vitaminDetailConns, tool.DescendantAdded:Connect(watchDescendant))
+
+	-- 3. Theo dõi Animation uống thuốc
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if hum then
+		vitaminAnimConn = hum.AnimationPlayed:Connect(function(track)
+			if not tool or tool.Parent ~= char then return end
+			local anim = track and track.Animation
+			local animId = anim and tostring(anim.AnimationId) or ""
+			local animName = anim and string.lower(anim.Name) or ""
+			if VITAMIN_OPEN_ANIM_IDS[animId] or animName:find("open", 1, true) or animName:find("drink", 1, true) or animName:find("use", 1, true) then
+				ApplyVitaminEffect(char)
+			end
+		end)
 	end
 
-	table.insert(vitaminSoundConns, tool.DescendantAdded:Connect(watchSound))
+	-- 4. Bấm sử dụng trực tiếp
+	vitaminsActConn = tool.Activated:Connect(function()
+		ApplyVitaminEffect(char)
+	end)
 end
 
 local function BindVitamins(char)
 	if vitaminsAddedConn then vitaminsAddedConn:Disconnect() end
-	if vitaminsActConn then vitaminsActConn:Disconnect() end
-	ClearVitaminSoundConns()
+	if vitaminsRemovedConn then vitaminsRemovedConn:Disconnect() end
+	ClearVitaminHooks()
 
+	-- Nếu đang cầm sẵn Vitamins trên tay lúc script chạy
+	for _, child in ipairs(char:GetChildren()) do
+		if IsVitaminTool(child) then
+			AttachToVitaminTool(char, child)
+		end
+	end
+
+	-- Khi rút Vitamins ra cầm
 	vitaminsAddedConn = char.ChildAdded:Connect(function(child)
-		if child.Name == "Vitamins" and child:IsA("Tool") then
-			if vitaminsActConn then vitaminsActConn:Disconnect() end
+		if IsVitaminTool(child) then
+			AttachToVitaminTool(char, child)
+		end
+	end)
 
-			HookVitaminSounds(child)
-
-			vitaminsActConn = child.Activated:Connect(function()
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				if hum and hum.Health > 0 then
+	-- Khi dùng hết viên cuối cùng và lọ Vitamins biến mất
+	vitaminsRemovedConn = char.ChildRemoved:Connect(function(child)
+		if IsVitaminTool(child) then
+			task.defer(function()
+				local backpack = player:FindFirstChild("Backpack")
+				if not child.Parent and (not backpack or not backpack:FindFirstChild(child.Name)) then
 					ApplyVitaminEffect(char)
 				end
 			end)
