@@ -11,18 +11,20 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 
 if _G.SprintSystem then
 	warn("is executed, nah")
-pcall(function()
-        local mainGame = require(LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game)
-        mainGame.caption("Is Executed, Returning...", true)
-    end)
-return
+	pcall(function()
+		local mainGame = require(player.PlayerGui.MainUI.Initiator.Main_Game)
+		mainGame.caption("Is Executed, Returning...", true)
+	end)
+	return
 end
 _G.SprintSystem = true
 
 -- Lấy RemotesFolder chuẩn của Doors
-local remotesFolder = ReplicatedStorage:FindFirstChild("EntityInfo") or ReplicatedStorage:FindFirstChild("Bricks") or ReplicatedStorage:FindFirstChild("RemotesFolder")
+local remotesFolder = ReplicatedStorage:FindFirstChild("EntityInfo")
+	or ReplicatedStorage:FindFirstChild("Bricks")
+	or ReplicatedStorage:FindFirstChild("RemotesFolder")
 
--- Đọc cấu hình: chỉ giữ lại usewhileloading theo yêu cầu + bổ sung thông số từ bản kia
+-- Cấu hình
 local cfg = _G.mobile_sprint_config or {}
 local CONFIG = {
 	usewhileloading = cfg.usewhileloading ~= nil and cfg.usewhileloading or true,
@@ -42,7 +44,17 @@ local isExhausted = false
 local lastSprintTime = 0
 local sprintHeldPC = false
 
--- Lấy Main_Game module (dùng cho caption & trạng thái chase nếu có)
+-- Buff Vitamins
+local vitaminBuffEndTime = 0
+local VITAMIN_BUFF_DURATION = 10
+local VITAMIN_SPEED_BONUS = 3
+local VITAMIN_REGEN_MULT = 1.75
+
+local function HasVitaminBuff()
+	return os.clock() < vitaminBuffEndTime
+end
+
+-- Lấy Main_Game module
 local mainGameModule = nil
 local function RefreshMainGame()
 	pcall(function()
@@ -73,10 +85,11 @@ local function IsChasing()
 end
 
 local function GetActiveBoost()
+	local bonus = HasVitaminBuff() and VITAMIN_SPEED_BONUS or 0
 	if not isSprinting then
-		return 0
+		return bonus
 	end
-	return CONFIG.sprintboost + (IsChasing() and CONFIG.chaseextra or 0)
+	return CONFIG.sprintboost + (IsChasing() and CONFIG.chaseextra or 0) + bonus
 end
 
 -- Tạo Sound Kiệt Sức
@@ -89,7 +102,7 @@ soundExhausted.Parent = player:WaitForChild("PlayerGui")
 
 character:SetAttribute("SpeedBoost", 0)
 
--- Cơ chế Collision & Speed Bypass lấy từ bản Rhyan57
+-- Cơ chế Collision & Speed Bypass
 local CollisionClone = nil
 local bypassRunId = 0
 
@@ -143,73 +156,7 @@ local function SetupCollisionBypass(char)
 	end)
 end
 
--- Cơ chế Vitamins: hồi +30 máu & đầy stamina (cooldown 10s)
-local vitaminsCooldown = false
-local vitaminsAddedConn = nil
-local vitaminsActConn = nil
-local vitaminsUnequipConn = nil
-
-local function BindVitamins(char)
-	if vitaminsAddedConn then vitaminsAddedConn:Disconnect() end
-	if vitaminsActConn then vitaminsActConn:Disconnect() end
-	if vitaminsUnequipConn then vitaminsUnequipConn:Disconnect() end
-
-	vitaminsAddedConn = char.ChildAdded:Connect(function(child)
-		if child.Name == "Vitamins" and child:IsA("Tool") then
-			if vitaminsActConn then vitaminsActConn:Disconnect() end
-			if vitaminsUnequipConn then vitaminsUnequipConn:Disconnect() end
-
-			vitaminsActConn = child.Activated:Connect(function()
-				if vitaminsCooldown then return end
-				vitaminsCooldown = true
-
-				local hum = char:FindFirstChildOfClass("Humanoid")
-				if hum and hum.Health > 0 then
-					hum.Health = math.min(hum.Health + 30, hum.MaxHealth)
-				end
-
-				stamina = CONFIG.maxstamina
-				isExhausted = false
-				if soundExhausted.IsPlaying then
-					soundExhausted:Stop()
-				end
-
-				task.delay(10, function()
-					vitaminsCooldown = false
-				end)
-			end)
-
-			vitaminsUnequipConn = child.Unequipped:Connect(function()
-				if vitaminsActConn then
-					vitaminsActConn:Disconnect()
-					vitaminsActConn = nil
-				end
-			end)
-		end
-	end)
-end
-
-SetupCollisionBypass(character)
-BindVitamins(character)
-
-player.CharacterAdded:Connect(function(newCharacter)
-	character = newCharacter
-	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-	stamina = CONFIG.maxstamina
-	isSprinting = false
-	isExhausted = false
-	sprintHeldPC = false
-
-	if soundExhausted.IsPlaying then
-		soundExhausted:Stop()
-	end
-	character:SetAttribute("SpeedBoost", 0)
-	SetupCollisionBypass(character)
-	BindVitamins(character)
-end)
-
--- GUI & Logic Sprint (hỗ trợ cả Mobile lẫn PC giữ phím Q)
+-- GUI & Logic Sprint
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "SprintGui"
 screenGui.ResetOnSpawn = false
@@ -285,7 +232,6 @@ darkOverlay.ZIndex = 100
 darkOverlay.Active = false
 darkOverlay.Parent = screenGui
 
--- Hiệu ứng ảnh tối viền lấy từ bản Sprint kia
 local vignetteImage = Instance.new("ImageLabel")
 vignetteImage.Name = "VignetteOverlay"
 vignetteImage.Size = UDim2.new(1, 0, 1, 0)
@@ -314,7 +260,7 @@ end
 local function stopSprinting()
 	isSprinting = false
 	if character then
-		character:SetAttribute("SpeedBoost", 0)
+		character:SetAttribute("SpeedBoost", GetActiveBoost())
 	end
 	RefreshSprintButtonVisual()
 end
@@ -335,6 +281,125 @@ local function startSprinting()
 		RefreshSprintButtonVisual()
 	end
 end
+
+-- Cơ chế Vitamins: hồi +30 máu, đầy stamina & bật buff tốc độ + hồi stamina
+local vitaminsCooldown = false
+local vitaminsAddedConn = nil
+local vitaminsActConn = nil
+local vitaminsAncestryConn = nil
+
+local function ApplyVitaminEffect(char)
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then return end
+	if vitaminsCooldown then return end
+
+	vitaminsCooldown = true
+	hum.Health = math.min(hum.Health + 30, hum.MaxHealth)
+
+	stamina = CONFIG.maxstamina
+	isExhausted = false
+	vitaminBuffEndTime = os.clock() + VITAMIN_BUFF_DURATION
+
+	if soundExhausted.IsPlaying then
+		soundExhausted:Stop()
+	end
+	if staminaBar then
+		staminaBar.Size = UDim2.new(1, 0, 1, 0)
+	end
+	if character then
+		character:SetAttribute("SpeedBoost", GetActiveBoost())
+	end
+	RefreshSprintButtonVisual()
+	ShowCaption("Vitamin boost active!")
+
+	task.delay(10, function()
+		vitaminsCooldown = false
+	end)
+end
+
+local VITAMIN_SOUND_IDS = {
+	["rbxassetid://11405639640"] = true, -- sound_open
+	["rbxassetid://10370341073"] = true, -- sound_flick
+	["rbxassetid://9121005783"] = true,  -- sound_close
+}
+
+local vitaminsCooldown = false
+local vitaminsAddedConn = nil
+local vitaminsActConn = nil
+local vitaminSoundConns = {}
+
+local function ClearVitaminSoundConns()
+	for _, conn in ipairs(vitaminSoundConns) do
+		pcall(function()
+			conn:Disconnect()
+		end)
+	end
+	table.clear(vitaminSoundConns)
+end
+
+local function HookVitaminSounds(tool)
+	ClearVitaminSoundConns()
+
+	local function watchSound(obj)
+		if obj:IsA("Sound") and VITAMIN_SOUND_IDS[obj.SoundId] then
+			local conn = obj.Played:Connect(function()
+				local hum = character and character:FindFirstChildOfClass("Humanoid")
+				if hum and hum.Health > 0 then
+					ApplyVitaminEffect(character)
+				end
+			end)
+			table.insert(vitaminSoundConns, conn)
+		end
+	end
+
+	for _, desc in ipairs(tool:GetDescendants()) do
+		watchSound(desc)
+	end
+
+	table.insert(vitaminSoundConns, tool.DescendantAdded:Connect(watchSound))
+end
+
+local function BindVitamins(char)
+	if vitaminsAddedConn then vitaminsAddedConn:Disconnect() end
+	if vitaminsActConn then vitaminsActConn:Disconnect() end
+	ClearVitaminSoundConns()
+
+	vitaminsAddedConn = char.ChildAdded:Connect(function(child)
+		if child.Name == "Vitamins" and child:IsA("Tool") then
+			if vitaminsActConn then vitaminsActConn:Disconnect() end
+
+			HookVitaminSounds(child)
+
+			vitaminsActConn = child.Activated:Connect(function()
+				local hum = char and char:FindFirstChildOfClass("Humanoid")
+				if hum and hum.Health > 0 then
+					ApplyVitaminEffect(char)
+				end
+			end)
+		end
+	end)
+end
+
+SetupCollisionBypass(character)
+BindVitamins(character)
+
+player.CharacterAdded:Connect(function(newCharacter)
+	character = newCharacter
+	humanoid = character:WaitForChild("Humanoid")
+	rootPart = character:WaitForChild("HumanoidRootPart")
+	stamina = CONFIG.maxstamina
+	isSprinting = false
+	isExhausted = false
+	sprintHeldPC = false
+	vitaminBuffEndTime = 0
+
+	if soundExhausted.IsPlaying then
+		soundExhausted:Stop()
+	end
+	character:SetAttribute("SpeedBoost", 0)
+	SetupCollisionBypass(character)
+	BindVitamins(character)
+end)
 
 if sprintButton then
 	sprintButton.Activated:Connect(function()
@@ -365,9 +430,7 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 RunService.Heartbeat:Connect(function(deltaTime)
-	local isCrouching = (character and character:GetAttribute("Crouching") == true)
-
-	if not humanoid or humanoid.Health <= 0 or (character and character:GetAttribute("Hiding") == true) or isCrouching then
+	if not humanoid or humanoid.Health <= 0 then
 		if isSprinting then
 			stopSprinting()
 		end
@@ -377,7 +440,17 @@ RunService.Heartbeat:Connect(function(deltaTime)
 		return
 	end
 
-	if sprintHeldPC and not isSprinting and not isExhausted and stamina > 0 then
+	local isCrouching = (character and character:GetAttribute("Crouching") == true)
+	local isHiding = (character and character:GetAttribute("Hiding") == true)
+
+	if isCrouching or isHiding then
+		if isSprinting then
+			stopSprinting()
+		end
+		if soundExhausted.IsPlaying then
+			soundExhausted:Stop()
+		end
+	elseif sprintHeldPC and not isSprinting and not isExhausted and stamina > 0 then
 		startSprinting()
 	end
 
@@ -410,8 +483,13 @@ RunService.Heartbeat:Connect(function(deltaTime)
 			end
 		end
 	else
+		if character then
+			character:SetAttribute("SpeedBoost", GetActiveBoost())
+		end
+
 		if os.clock() - lastSprintTime >= CONFIG.regendelay then
-			stamina = math.clamp(stamina + (CONFIG.staminaregen * deltaTime), 0, CONFIG.maxstamina)
+			local regenRate = CONFIG.staminaregen * (HasVitaminBuff() and VITAMIN_REGEN_MULT or 1)
+			stamina = math.clamp(stamina + (regenRate * deltaTime), 0, CONFIG.maxstamina)
 
 			if stamina > 100 and soundExhausted.IsPlaying then
 				soundExhausted:Stop()
