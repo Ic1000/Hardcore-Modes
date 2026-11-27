@@ -12,11 +12,11 @@ local LocalPlayer = Players.LocalPlayer
 local CurrentRooms = Workspace:WaitForChild("CurrentRooms")
 local LatestRoom = ReplicatedStorage:WaitForChild("GameData"):WaitForChild("LatestRoom")
 
-local speed 
-if getgenv().FasterTrouble then 
-	speed = 250 
-else 
-	speed = 200 
+local speed
+if getgenv().FasterTrouble then
+	speed = 250
+else
+	speed = 200
 end
 
 local RED_COLOR = Color3.fromRGB(255, 25, 25)
@@ -156,22 +156,22 @@ local function ShowCrucifixFace(entityModel)
 			emitter.TimeScale = 1
 			emitter.Enabled = true
 			emitter:Emit(20)
-			
+
 			local repent = GetGitSound(
-		"https://github.com/Ic1000/Misc/raw/refs/heads/main/Ripper%20Repent%20SFX.mp3",
-		"Ripper_Repent_SFX"
-	)
-	
-	if repent then
-		repent.Volume = 7
-		repent.Parent = SoundService
-		repent:Play()
-		repent.Ended:Connect(function()
-			if repent and repent.Parent then
-				repent:Destroy()
-	       		end
-       		end)
-        	end
+				"https://github.com/Ic1000/Misc/raw/refs/heads/main/Ripper%20Repent%20SFX.mp3",
+				"Ripper_Repent_SFX"
+			)
+
+			if repent then
+				repent.Volume = 7
+				repent.Parent = SoundService
+				repent:Play()
+				repent.Ended:Connect(function()
+					if repent and repent.Parent then
+						repent:Destroy()
+					end
+				end)
+			end
 		end
 	end
 end
@@ -179,8 +179,12 @@ end
 -- ========================================================
 -- CƠ CHẾ PHÁ & MỞ CỬA (RunBla + ClientOpen + FadeDestroy)
 -- ========================================================
+local isJumpscaring = false
+local blaTriggered = false
+local TriggerJumpscareSequence = nil
+
 local function FadeDestroy(model)
-	if not model or not model.Parent then return end
+	if not model or not model.Parent or isJumpscaring then return end
 	local info = TweenInfo.new(3, Enum.EasingStyle.Linear)
 
 	for _, v in ipairs(model:GetDescendants()) do
@@ -214,20 +218,20 @@ local function FadeDestroy(model)
 	end
 
 	task.delay(3, function()
-		if model and model.Parent then
+		if model and model.Parent and not isJumpscaring then
 			model:Destroy()
 		end
 	end)
 end
 
 local function TweenPivot(model, target, info)
-	if not model or not model.Parent then return end
+	if not model or not model.Parent or isJumpscaring then return end
 
 	local val = Instance.new("CFrameValue")
 	val.Value = model:GetPivot()
 
 	local conn = val:GetPropertyChangedSignal("Value"):Connect(function()
-		if model.Parent then
+		if model.Parent and not isJumpscaring then
 			model:PivotTo(val.Value)
 		end
 	end)
@@ -240,9 +244,34 @@ local function TweenPivot(model, target, info)
 	val:Destroy()
 end
 
+local function ShouldTriggerDuringBreak(model)
+	if isJumpscaring or not model or not model.Parent then return false end
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildWhichIsA("Humanoid")
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not char or not hum or hum.Health <= 0 or not hrp then return false end
+	if char:GetAttribute("Hiding") then return false end
+
+	local origin = model:GetPivot().Position
+	local toPlayer = hrp.Position - origin
+	if toPlayer.Magnitude > 50 then return false end
+
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { model, char }
+	rayParams.IgnoreWater = true
+
+	local hit = Workspace:Raycast(origin, toPlayer, rayParams)
+	if hit then
+		return false -- Bị tường/vật cản che khuất -> không giết xuyên tường
+	end
+
+	return true
+end
+
 local function RunBla(entityObj)
 	local model = entityObj and entityObj.Model
-	if not model or not model.Parent then return end
+	if not model or not model.Parent or isJumpscaring then return end
 
 	local room = CurrentRooms:FindFirstChild(tostring(LatestRoom.Value))
 	if not room then return end
@@ -263,7 +292,7 @@ local function RunBla(entityObj)
 		end
 	end
 
-	-- Nhánh 1: Phòng có chìa khóa -> đập cửa rồi biến mất
+	-- Nhánh 1: Phòng có chìa khóa -> đập cửa rồi biến mất (vẫn cho phép jumpscare nếu chạm)
 	if chance == 1 then
 		local snd = GetGitSound(
 			"https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/XRecorder_Edited_20261012_01.mp3?raw=true",
@@ -287,11 +316,17 @@ local function RunBla(entityObj)
 			s:ShakeOnce(15, 11.5, 0.1, 2, 15, 0.5)
 		end)
 
-		if snd.TimeLength > 0 then
-			snd.Ended:Wait()
-		else
-			task.wait(1.5)
+		local elapsed = 0
+		local waitLimit = (snd.TimeLength > 0) and snd.TimeLength or 1.5
+		while elapsed < waitLimit and not isJumpscaring do
+			if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+				TriggerJumpscareSequence(model, root)
+				return
+			end
+			elapsed += task.wait(0.05)
 		end
+
+		if isJumpscaring then return end
 
 		if entityObj:IsAlive() then
 			entityObj:Pause()
@@ -328,23 +363,46 @@ local function RunBla(entityObj)
 	end
 	if not door then return end
 
+	if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+		TriggerJumpscareSequence(model, root)
+		return
+	end
+
 	local original = model:GetPivot()
 	local target = original + door.CFrame.LookVector * -20
 	TweenPivot(model, target, TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+	if isJumpscaring then return end
+
+	if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+		TriggerJumpscareSequence(model, root)
+		return
+	end
 
 	task.wait(1.5)
+	if isJumpscaring then return end
+
+	if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+		TriggerJumpscareSequence(model, root)
+		return
+	end
 
 	local target2 = original + door.CFrame.LookVector * -25
 	TweenPivot(model, target2, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out))
+	if isJumpscaring then return end
 
 	task.spawn(function()
-		if model.Parent then
+		if model.Parent and not isJumpscaring then
 			TweenPivot(model, original, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.In))
 		end
 	end)
 
 	task.wait(0.6)
-	if not model.Parent then return end
+	if not model.Parent or isJumpscaring then return end
+
+	if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+		TriggerJumpscareSequence(model, root)
+		return
+	end
 
 	pcall(function()
 		local CameraShaker = require(ReplicatedStorage.CameraShaker)
@@ -413,11 +471,17 @@ local function RunBla(entityObj)
 		HideHidden(clone)
 	end
 
-	if snd.TimeLength > 0 then
-		snd.Ended:Wait()
-	else
-		task.wait(2)
+	local elapsed2 = 0
+	local waitLimit2 = (snd.TimeLength > 0) and snd.TimeLength or 2
+	while elapsed2 < waitLimit2 and not isJumpscaring do
+		if ShouldTriggerDuringBreak(model) and TriggerJumpscareSequence then
+			TriggerJumpscareSequence(model, root)
+			return
+		end
+		elapsed2 += task.wait(0.05)
 	end
+
+	if isJumpscaring then return end
 
 	if entityObj:IsAlive() then
 		entityObj:Pause()
@@ -444,13 +508,10 @@ if not success or not Spawner then
 	return
 end
 
-local isJumpscaring = false
-local blaTriggered = false
-
 local entity = Spawner:Create({
 	Entity = {
 		Name = "RipperBla",
-		Asset = "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/Place_131351567799504_Model_RipperMovingkkd_1791822177.txt",
+		Asset = "https://github.com/eoyoustme/Hardcore/blob/main/RipperMoving.rbxm?raw=true",
 		HeightOffset = 0,
 	},
 	Lights = {
@@ -569,6 +630,204 @@ local entity = Spawner:Create({
 
 if not entity then return end
 
+TriggerJumpscareSequence = function(targetModel, targetPart)
+	if isJumpscaring then return end
+
+	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local model = targetModel or entity.Model or Workspace:FindFirstChild("RipperBla")
+	if not model then return end
+	local part = targetPart or model:FindFirstChild("Ripe") or model.PrimaryPart
+	if not part then return end
+
+	if character:GetAttribute("Hiding") then
+		return
+	end
+
+	isJumpscaring = true
+	pcall(function()
+		entity:Pause()
+	end)
+	part.Anchored = true
+	task.wait(0.7)
+
+	task.spawn(function()
+		local hum = character:WaitForChild("Humanoid", 5)
+		local hrp = character:WaitForChild("HumanoidRootPart")
+		local camera = Workspace.CurrentCamera
+		local entityModel = model
+		local primaryPart = part
+
+		if not (entityModel and hum and hrp and primaryPart and camera) then return end
+
+		local originalWalkSpeed = hum.WalkSpeed
+		local originalJumpPower = hum.JumpPower
+		hum.WalkSpeed = 0
+		hum.JumpPower = 0
+
+		local controlsModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
+		controlsModule:Disable()
+
+		local JumpscareSound = GetGitSound("https://github.com/Ic1000/Misc/raw/refs/heads/main/RipperJumpscareSlam.mp3", "Ripper_Slam_SFX")
+		if JumpscareSound then
+			JumpscareSound.Parent = SoundService
+			JumpscareSound.Volume = 7
+			JumpscareSound.PlaybackSpeed = 1
+			JumpscareSound:Play()
+		end
+
+		local function SetAllParticlesTimeScale(m, timescale)
+			for _, descendant in ipairs(m:GetDescendants()) do
+				if descendant:IsA("ParticleEmitter") then
+					descendant.TimeScale = timescale
+				end
+			end
+		end
+
+		SetAllParticlesTimeScale(entityModel, 1)
+
+		local ripeAttachment = primaryPart:FindFirstChild("Attachment", true)
+		if ripeAttachment then
+			local emitter = ripeAttachment:FindFirstChild("Face1")
+			if emitter then
+				emitter.Texture = "rbxassetid://12737595583"
+				emitter.Size = NumberSequence.new(10)
+				emitter.Squash = NumberSequence.new(0)
+				emitter.Enabled = true
+				emitter:Emit(20)
+				task.wait(0.1)
+				emitter.TimeScale = 0
+			end
+		end
+
+		camera.CameraType = Enum.CameraType.Scriptable
+		local startCFrame = camera.CFrame
+		local lerpAlpha = 0
+		local lerpSpeed = 10
+
+		local lockConnection
+		lockConnection = RunService.RenderStepped:Connect(function(dt)
+			if not primaryPart or not primaryPart.Parent then
+				if lockConnection then lockConnection:Disconnect() end
+				return
+			end
+			local targetCFrame = CFrame.lookAt(startCFrame.Position, primaryPart.Position)
+			lerpAlpha = math.clamp(lerpAlpha + dt * lerpSpeed, 0, 1)
+			if lerpAlpha < 1 then
+				camera.CFrame = startCFrame:Lerp(targetCFrame, lerpAlpha)
+			else
+				camera.CFrame = CFrame.lookAt(camera.CFrame.Position, primaryPart.Position)
+			end
+		end)
+
+		task.wait(0.35)
+		SetAllParticlesTimeScale(entityModel, 0)
+
+		local Jumpscare = GetGitSound("https://github.com/eoyoustme/back/raw/main/Kill_with_static.mp3", "Kill")
+		if Jumpscare then
+			Jumpscare.Parent = SoundService
+			Jumpscare.Volume = 1
+			Jumpscare.PlaybackSpeed = 1
+		end
+
+		for _, descendant in ipairs(entityModel:GetDescendants()) do
+			if descendant:IsA("Sound") then
+				descendant.Playing = false
+				descendant.Volume = 0
+			end
+		end
+
+		if Jumpscare then Jumpscare:Play() end
+
+		local MainUI = LocalPlayer.PlayerGui:WaitForChild("MainUI")
+		local Url = "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/Place_131351567799504_Frame_Jumpscare_Ripper_1790262146.txt"
+		local FileName = "Jumpscare_Ripper.txt"
+		if not isfile(FileName) then
+			pcall(function()
+				writefile(FileName, game:HttpGet(Url))
+			end)
+		end
+		local Obj = game:GetObjects(getcustomasset(FileName))[1]
+		if Obj then Obj.Parent = MainUI end
+
+		local UI = MainUI:WaitForChild("Jumpscare_Ripper", true)
+		if not UI then return end
+
+		local Static = MainUI:FindFirstChild("Static", true)
+		local Alpha = Instance.new("NumberValue")
+		Alpha.Value = 1
+		local GrainIndex = 0
+		local LastGrain = tick()
+
+		local function NoiseImage()
+			if tick() - LastGrain >= 1 / 80 then
+				LastGrain = tick()
+				local Old = UI:FindFirstChild("GrainImage" .. tostring(GrainIndex))
+				if Old then Old.ImageTransparency = 1 end
+				GrainIndex = math.fmod(GrainIndex + 1, 12)
+				local New = UI:FindFirstChild("GrainImage" .. tostring(GrainIndex))
+				if New then
+					New.ImageTransparency = Alpha.Value
+					New.ImageColor3 = Color3.new(1, 1, 1)
+				end
+			end
+		end
+
+		UI.Visible = false
+		local Connection = RunService.RenderStepped:Connect(function()
+			NoiseImage()
+		end)
+
+		task.wait(1)
+		UI.Visible = true
+		TweenService:Create(Alpha, TweenInfo.new(2), { Value = 0 }):Play()
+		if Static and Static:IsA("Sound") then
+			TweenService:Create(Static, TweenInfo.new(2), { Volume = 3 }):Play()
+		end
+
+		task.wait(2)
+		UI.Visible = false
+		if Connection then Connection:Disconnect() end
+		if Static and Static:IsA("Sound") then
+			TweenService:Create(Static, TweenInfo.new(1), { Volume = 0 }):Play()
+		end
+
+		for i = 0, 11 do
+			local Img = UI:FindFirstChild("GrainImage" .. tostring(i))
+			if Img then Img.ImageTransparency = 1 end
+		end
+		Alpha:Destroy()
+
+		local sound = Instance.new("Sound")
+		sound.SoundId = "rbxassetid://4988621968"
+		sound.Volume = 7
+		sound.PlaybackSpeed = 0.6
+		sound.Parent = SoundService
+		sound:Play()
+
+		task.wait()
+		if hum then hum.Health = 100 end
+
+		pcall(function()
+			ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = "Ripper"
+		end)
+
+		if entityModel and entityModel.Parent then
+			entityModel:Destroy()
+		end
+		if lockConnection then
+			lockConnection:Disconnect()
+		end
+		camera.CameraType = Enum.CameraType.Custom
+
+		if hum and hum.Health > 0 then
+			hum.WalkSpeed = originalWalkSpeed
+			hum.JumpPower = originalJumpPower
+			controlsModule:Enable()
+			GiveAchievement()
+		end
+	end)
+end
+
 -- ========================================================
 -- CALLBACKS
 -- ========================================================
@@ -578,10 +837,12 @@ entity:SetCallback("OnSpawned", function()
 
 	task.spawn(function()
 		local sound5 = Instance.new("Sound")
-		sound5.PlaybackSpeed = 1
-		sound5.Volume = 1.8
-		sound5.SoundId = "rbxassetid://101665501585468"
+		sound5.SoundId = "rbxassetid://12971875415"
+		sound5.Volume = 3
 		sound5.Parent = Workspace
+		local distortion = Instance.new("DistortionSoundEffect")
+		distortion.Level = 0.4
+		distortion.Parent = sound5
 		sound5:Play()
 		task.wait(7)
 		sound5:Destroy()
@@ -644,9 +905,9 @@ entity:SetCallback("OnStartMoving", function()
 
 	-- Quét tới cửa phòng mới nhất để chạy phá cửa + ClientOpen:FireServer()
 	task.spawn(function()
-		while entity:IsAlive() and not blaTriggered and not isJumpscaring do
+		while entity:IsAlive() and not blaTriggered do
 			local model = entity.Model
-			if model and not model:GetAttribute("BeingBanished") and not model:GetAttribute("Paused") then
+			if model and not model:GetAttribute("BeingBanished") and not model:GetAttribute("Paused") and not isJumpscaring then
 				local room = CurrentRooms:FindFirstChild(tostring(LatestRoom.Value))
 				local door = room and room:FindFirstChild("Door")
 				if door then
@@ -654,7 +915,6 @@ entity:SetCallback("OnStartMoving", function()
 					if dist <= 8 then
 						blaTriggered = true
 						entity:Pause()
-						model:SetAttribute("Damage", false)
 						RunBla(entity)
 						break
 					end
@@ -666,204 +926,7 @@ entity:SetCallback("OnStartMoving", function()
 end)
 
 entity:SetCallback("OnDamagePlayer", function()
-	if isJumpscaring or blaTriggered then return end
-	isJumpscaring = true
-
-	local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-	local humanoid = character:WaitForChild("Humanoid", 5)
-	if humanoid then humanoid.Health = 100 end
-
-	local model = entity.Model or Workspace:FindFirstChild("RipperBla")
-	if not model then return end
-	local part = model:FindFirstChild("Ripe") or model.PrimaryPart
-	if not part then return end
-
-	entity:Pause()
-	part.Anchored = true
-	task.wait(0.7)
-
-	if not LocalPlayer.Character:GetAttribute("Hiding") then
-		task.spawn(function()
-			local hum = character:WaitForChild("Humanoid", 5)
-			local hrp = character:WaitForChild("HumanoidRootPart")
-			local camera = Workspace.CurrentCamera
-			local entityModel = model
-			local primaryPart = part
-
-			if not (entityModel and hum and hrp and primaryPart and camera) then return end
-
-			local originalWalkSpeed = hum.WalkSpeed
-			local originalJumpPower = hum.JumpPower
-			hum.WalkSpeed = 0
-			hum.JumpPower = 0
-
-			local controlsModule = require(LocalPlayer:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule")):GetControls()
-			controlsModule:Disable()
-			
-			local JumpscareSound= GetGitSound("https://github.com/Ic1000/Misc/raw/refs/heads/main/RipperJumpscareSlam.mp3", "Ripper_Slam_SFX")
-			if JumpscareSound then
-				JumpscareSound.Parent = SoundService 			
-				JumpscareSound.Volume = 7
-				JumpscareSound.PlaybackSpeed = 1
-          JumpscareSound:Play()
-			end
-
-			local function SetAllParticlesTimeScale(m, timescale)
-				for _, descendant in ipairs(m:GetDescendants()) do
-					if descendant:IsA("ParticleEmitter") then
-						descendant.TimeScale = timescale
-					end
-				end
-			end
-
-			SetAllParticlesTimeScale(entityModel, 1)
-
-			local ripeAttachment = primaryPart:FindFirstChild("Attachment", true)
-			if ripeAttachment then
-				local emitter = ripeAttachment:FindFirstChild("Face1")
-				if emitter then
-					emitter.Texture = "rbxassetid://12737595583"
-					emitter.Size = NumberSequence.new(10)
-					emitter.Squash = NumberSequence.new(0)
-					emitter.Enabled = true
-					emitter:Emit(20)
-					task.wait(0.1)
-					emitter.TimeScale = 0
-				end
-			end
-
-			camera.CameraType = Enum.CameraType.Scriptable
-			local startCFrame = camera.CFrame
-			local lerpAlpha = 0
-			local lerpSpeed = 10
-
-			local lockConnection
-			lockConnection = RunService.RenderStepped:Connect(function(dt)
-				if not primaryPart or not primaryPart.Parent then
-					if lockConnection then lockConnection:Disconnect() end
-					return
-				end
-				local targetCFrame = CFrame.lookAt(startCFrame.Position, primaryPart.Position)
-				lerpAlpha = math.clamp(lerpAlpha + dt * lerpSpeed, 0, 1)
-				if lerpAlpha < 1 then
-					camera.CFrame = startCFrame:Lerp(targetCFrame, lerpAlpha)
-				else
-					camera.CFrame = CFrame.lookAt(camera.CFrame.Position, primaryPart.Position)
-				end
-			end)
-
-			task.wait(0.35)
-			SetAllParticlesTimeScale(entityModel, 0)
-
-			local Jumpscare = GetGitSound("https://github.com/eoyoustme/back/raw/main/Kill_with_static.mp3", "Kill")
-			if Jumpscare then
-				Jumpscare.Parent = SoundService 			
-				Jumpscare.Volume = 1
-				Jumpscare.PlaybackSpeed = 1
-			end
-
-			for _, descendant in ipairs(entityModel:GetDescendants()) do
-				if descendant:IsA("Sound") then
-					descendant.Playing = false
-					descendant.Volume = 0
-				end
-			end
-
-			if Jumpscare then Jumpscare:Play() end
-
-			local MainUI = LocalPlayer.PlayerGui:WaitForChild("MainUI")
-			local Url = "https://github.com/lynguyen26031993-design/-u/raw/refs/heads/main/Place_131351567799504_Frame_Jumpscare_Ripper_1790262146.txt"
-			local FileName = "Jumpscare_Ripper.txt"
-			if not isfile(FileName) then
-				pcall(function()
-					writefile(FileName, game:HttpGet(Url))
-				end)
-			end
-			local Obj = game:GetObjects(getcustomasset(FileName))[1]
-			if Obj then Obj.Parent = MainUI end
-
-			local UI = MainUI:WaitForChild("Jumpscare_Ripper", true)
-			if not UI then return end
-
-			local Static = MainUI:FindFirstChild("Static", true)
-			local Alpha = Instance.new("NumberValue")
-			Alpha.Value = 1
-			local GrainIndex = 0
-			local LastGrain = tick()
-
-			local function NoiseImage()
-				if tick() - LastGrain >= 1 / 80 then
-					LastGrain = tick()
-					local Old = UI:FindFirstChild("GrainImage" .. tostring(GrainIndex))
-					if Old then Old.ImageTransparency = 1 end
-					GrainIndex = math.fmod(GrainIndex + 1, 12)
-					local New = UI:FindFirstChild("GrainImage" .. tostring(GrainIndex))
-					if New then
-						New.ImageTransparency = Alpha.Value
-						New.ImageColor3 = Color3.new(1, 1, 1)
-					end
-				end
-			end
-
-			UI.Visible = false
-			local Connection = RunService.RenderStepped:Connect(function()
-				NoiseImage()
-			end)
-
-			task.wait(1)
-			UI.Visible = true
-			TweenService:Create(Alpha, TweenInfo.new(2), { Value = 0 }):Play()
-			if Static and Static:IsA("Sound") then
-				TweenService:Create(Static, TweenInfo.new(2), { Volume = 3 }):Play()
-			end
-
-			task.wait(2)
-			UI.Visible = false
-			if Connection then Connection:Disconnect() end
-			if Static and Static:IsA("Sound") then
-				TweenService:Create(Static, TweenInfo.new(1), { Volume = 0 }):Play()
-			end
-
-			for i = 0, 11 do
-				local Img = UI:FindFirstChild("GrainImage" .. tostring(i))
-				if Img then Img.ImageTransparency = 1 end
-			end
-			Alpha:Destroy()
-			
-			local sound = Instance.new("Sound")
-		sound.SoundId = "rbxassetid://4988621968"
-		sound.Volume = 7
-		sound.PlaybackSpeed = 0.6
-		sound.Parent = SoundService
-		sound:Play()
-
-			task.wait()
-			if hum then hum.Health = 0 end
-
-			pcall(function()
-				ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = "Ripper"
-			end)
-
-			if entityModel and entityModel.Parent then
-				entityModel:Destroy()
-			end
-			if lockConnection then
-				lockConnection:Disconnect()
-			end
-			camera.CameraType = Enum.CameraType.Custom
-
-			if hum and hum.Health > 0 then
-				hum.WalkSpeed = originalWalkSpeed
-				hum.JumpPower = originalJumpPower
-				controlsModule:Enable()
-				GiveAchievement()
-			end
-		end)
-	else
-		isJumpscaring = false
-		part.Anchored = false
-		entity:Resume()
-	end
+	TriggerJumpscareSequence(entity.Model, nil)
 end)
 
 entity:SetCallback("OnDespawned", function()
