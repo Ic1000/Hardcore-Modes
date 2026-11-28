@@ -805,7 +805,7 @@ TriggerJumpscareSequence = function(targetModel, targetPart)
 		sound:Play()
 
 		task.wait()
-		if hum then hum.Health = 100 end
+		if hum then hum.Health = 0 end
 
 		pcall(function()
 			ReplicatedStorage.GameStats["Player_" .. LocalPlayer.Name].Total.DeathCause.Value = "Ripper"
